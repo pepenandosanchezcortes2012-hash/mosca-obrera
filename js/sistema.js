@@ -793,6 +793,13 @@
 
   function citar(a) { return /[\s|;&>'"$]/.test(a) ? "'" + a.replace(/'/g, "'\\''") + "'" : a; }
 
+  // Autocompletar subcomandos (índice = qué argumento se está escribiendo).
+  const SUBCOMP = {
+    nexus: { 1: ['bateria', 'ubicacion', 'red', 'vibrar', 'copiar', 'pegar', 'compartir', 'despierta', 'tocar', 'escribir', 'abrir', 'notifs'] },
+    mosca: { 1: ['estado', 'trabajar', 'laboratorio', 'premio', 'castigo', 'ruta', 'rutas', 'velocidad', 'nombre', 'log'] },
+    ruta: { 2: APPS.slice() }
+  };
+
   function intervalo(s) {
     const m = /^(\d+(?:\.\d+)?)(s|m|h)$/.exec(String(s || ''));
     if (!m) { return 0; }
@@ -1030,7 +1037,11 @@
       if (asignacion && args.length === 1) { this.env[asignacion[1]] = asignacion[2]; return { out: '' }; }
       const nombre = args[0];
       const def = COMANDOS[nombre] && OCULTOS.indexOf(nombre) < 0 ? COMANDOS[nombre] : COMANDOS[ALIAS[nombre]];
-      if (!def) { return { out: '', err: 'mosh: ' + nombre + ': no existe ese comando (escribe «ayuda»)\n', code: 127 }; }
+      if (!def) {
+        // Si parece lenguaje natural (varias palabras o acentos), sugiere el copiloto.
+        const pista = (args.length > 1 || /[áéíóúñ¿¡]/i.test(nombre)) ? ' ¿Hablarle normal? prueba:  haz ' + args.join(' ') : ' (escribe «ayuda»)';
+        return { out: '', err: 'mosh: ' + nombre + ': no existe ese comando.' + pista + '\n', code: 127 };
+      }
       const extra = nombre === 'll' ? ['-l'] : [];
       try {
         const r = await def.fn({ args: extra.concat(args.slice(1)), stdin, sh: this, fs: this.fs, ent: this.ent, nombre });
@@ -1052,15 +1063,22 @@
         ops = Object.keys(COMANDOS).concat(Object.keys(ALIAS)).filter((n) => OCULTOS.indexOf(n) < 0 && n.startsWith(pal)).sort();
         ops = ops.map((n) => n + ' ');
       } else {
-        const exp = pal.replace(/^~(?=\/|$)/, HOME);
-        const corte = exp.lastIndexOf('/');
-        const dir = corte >= 0 ? exp.slice(0, corte) || '/' : '.';
-        const base = corte >= 0 ? exp.slice(corte + 1) : exp;
-        try {
-          ops = this.fs.listar(this.ruta(dir)).filter((x) => x.nombre.startsWith(base))
-            .map((x) => pal.slice(0, pal.length - base.length) + x.nombre + (x.tipo === 'd' ? '/' : ' '));
-        } catch (e) {
-          ops = [];
+        // Subcomandos conocidos (nexus, mosca, ruta…): antes de buscar archivos.
+        const toks = antes.trim().split(/\s+/);
+        const cmd0 = ALIAS[toks[0]] || toks[0];
+        const sub = SUBCOMP[cmd0] && SUBCOMP[cmd0][toks.length];
+        ops = sub ? sub.filter((n) => n.startsWith(pal)).map((n) => n + ' ') : null;
+        if (!ops || !ops.length) {
+          const exp = pal.replace(/^~(?=\/|$)/, HOME);
+          const corte = exp.lastIndexOf('/');
+          const dir = corte >= 0 ? exp.slice(0, corte) || '/' : '.';
+          const base = corte >= 0 ? exp.slice(corte + 1) : exp;
+          try {
+            ops = this.fs.listar(this.ruta(dir)).filter((x) => x.nombre.startsWith(base))
+              .map((x) => pal.slice(0, pal.length - base.length) + x.nombre + (x.tipo === 'd' ? '/' : ' '));
+          } catch (e) {
+            ops = [];
+          }
         }
       }
       if (!ops.length) { return { linea, opciones: [] }; }

@@ -74,8 +74,8 @@
       if (!/^\s*(hola|buenas|qu[eé] (puedes|sabes) hacer|ayuda|help|qu[eé] haces|en qu[eé] me ayudas)\b/i.test(t)) { return null; }
       return plan('Soy el copiloto de la mosca. Dime cosas como: «cada mañana mándame el precio de bitcoin», ' +
         '«manda hola a discord», «las facturas van al webhook», «anota comprar pan», «cuánta batería tengo», ' +
-        '«qué tienes pendiente». Para controlar el teléfono (tocar, abrir apps, leer notificaciones) hace falta ' +
-        'Mosca OS nativo; yo ya armo esas órdenes con nexus.', []);
+        '«qué tienes pendiente». Puedes encadenar: «manda hola a discord y luego vibra». Para controlar el ' +
+        'teléfono (tocar, abrir apps, leer notificaciones) hace falta Mosca OS nativo; yo ya armo esas órdenes con nexus.', []);
     },
 
     // «cada <intervalo> <acción>»: arma la tarea repetida con la acción de adentro.
@@ -177,6 +177,13 @@
       return plan('te muestro ' + destino, ['cat ' + destino]);
     },
 
+    // Qué hora es / limpiar la pantalla.
+    function (t) {
+      if (/^\s*(qu[eé] hora( es)?|la hora|dame la hora)\b/i.test(t)) { return plan('la hora', ['date']); }
+      if (/\b(limpia|borra|despeja)\b.*(pantalla|terminal)\b/i.test(t)) { return plan('limpio la pantalla', ['clear']); }
+      return null;
+    },
+
     // Estado / pendientes / qué hace.
     function (t) {
       if (/\b(qu[eé]\s+(tienes|hay|falta|est[aá]s haciendo)|c[oó]mo\s+(vas|est[aá]s)|pendientes?|estado|trabajos?)\b/i.test(t)) {
@@ -237,16 +244,34 @@
     return null;
   }
 
+  // Conectores para encadenar: de los más claros a los más ambiguos. Solo se corta si TODAS las partes se entienden,
+  // así «anota pan y leche» queda entero (una nota) pero «vibra y copia hola» son dos acciones.
+  const CONECTORES = [/\s+y\s+luego\s+/i, /\s+luego\s+/i, /\s+y\s+despu[eé]s(?:\s+de)?\s+/i, /\s*;\s*/, /\s+y\s+/i, /\s*,\s*/];
+
+  function combinar(planes) {
+    return { ok: true, di: planes.map((p) => p.di).filter(Boolean).join(' · '),
+      comandos: planes.reduce((a, p) => a.concat(p.comandos || []), []),
+      confirmar: planes.some((p) => p.confirmar) };
+  }
+
   /**
-   * Entiende una orden en español. Devuelve:
+   * Entiende una orden en español, encadenando varias si hace falta. Devuelve:
    *   { ok:true, di, comandos:[…], confirmar }  o  { ok:false, pregunta }
    * ctx (opcional): { apps, temaSalida, olores }.
    */
   function interpretar(texto, ctx) {
-    const r = interpretarUna(texto, ctx);
+    const t = String(texto == null ? '' : texto).trim();
+    for (const sep of CONECTORES) {
+      const partes = t.split(sep).map((x) => x.trim()).filter(Boolean);
+      if (partes.length >= 2) {
+        const planes = partes.map((x) => interpretarUna(x, ctx));
+        if (planes.every(Boolean)) { return combinar(planes); }
+      }
+    }
+    const r = interpretarUna(t, ctx);
     if (r) { return r; }
     return { ok: false, comandos: [],
-      pregunta: 'No te entendí. Prueba: «cada mañana mándame el precio de bitcoin», «manda hola a discord», ' +
+      pregunta: 'No te entendí. Prueba: «cada mañana mándame el precio de bitcoin», «manda hola a discord y luego vibra», ' +
         '«las facturas van al webhook», «anota comprar pan», «cuánta batería tengo», «qué tienes pendiente».' };
   }
 

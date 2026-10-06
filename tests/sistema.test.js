@@ -252,7 +252,35 @@ test('copiloto: entiende lo común (unidad por separado)', () => {
   assert.equal(c('anota comprar pan'), 'echo "comprar pan" >> ~/notas.txt');
   assert.equal(c('vibra'), 'nexus vibrar');
   assert.equal(c('abre whatsapp'), 'nexus abrir "whatsapp"');
+  assert.equal(c('qué hora es'), 'date');
   assert.equal(Copiloto.interpretar('qwerty zxcvb').ok, false);
+});
+
+test('copiloto: encadena varias acciones, pero no parte una sola', () => {
+  const c = (t) => Copiloto.interpretar(t).comandos;
+  assert.deepEqual(c('vibra y copia hola'), ['nexus vibrar', 'nexus copiar "hola"']);
+  assert.deepEqual(c('manda hola a discord y luego vibra'), ['echo "hola" > /apps/discord', 'nexus vibrar']);
+  assert.deepEqual(c('cuánta batería y dónde estoy'), ['nexus bateria', 'nexus ubicacion']);
+  assert.equal(c('anota comprar pan y leche').length, 1, '«pan y leche» es una sola nota');
+  assert.equal(c('anota comprar pan y leche')[0], 'echo "comprar pan y leche" >> ~/notas.txt');
+  assert.equal(c('manda hola a discord; vibra; copia listo').length, 3);
+});
+
+test('terminal: autocompleta subcomandos y sugiere el copiloto', async () => {
+  const { sh, run } = os();
+  assert.equal(sh.completar('nexus ba').linea, 'nexus bateria ');
+  assert.equal(sh.completar('mosca tra').linea, 'mosca trabajar ');
+  assert.equal(sh.completar('ruta ventas ce').linea, 'ruta ventas celular ');
+  assert.deepEqual(sh.completar('nexus co').opciones.sort(), ['compartir', 'copiar']);
+  assert.match((await run('comprar pan hoy')).err, /haz comprar pan hoy/);
+  assert.match((await run('xyzzy')).err, /escribe «ayuda»/);
+});
+
+test('haz: encadena en la terminal', async () => {
+  const { run, ent } = os();
+  await run('haz vibra y copia pegado');
+  assert.equal(ent.dispositivo._vibro, 1);
+  assert.equal(ent.dispositivo._portapapeles, 'pegado');
 });
 
 test('autocompletar comandos y rutas', async () => {

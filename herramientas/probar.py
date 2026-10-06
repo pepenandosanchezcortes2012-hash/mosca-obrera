@@ -172,6 +172,16 @@ def terminal(c, ok, caps):
     copiloto('cada 10s mándame el precio de bitcoin')
     ok(hasta("/tarea 1|cada 10s/.test(document.querySelector('#terminal .term-salida').innerText)"),
        'el copiloto creó una tarea que se repite')
+    # Encadenar dos acciones en una frase.
+    c.js("MoscaObrera.cerebro.contexto = null")
+    copiloto('vibra y luego copia encadenado')
+    ok(hasta("document.querySelector('#terminal .term-salida').innerText.includes('nexus copiar')"),
+       'el copiloto encadena «vibra y luego copia …» en dos comandos')
+    # Autocompletar un subcomando con TAB.
+    c.js("""(() => { const i = document.querySelector('#terminal .term-input'); i.value = 'nexus ba';
+        i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true })); })()""")
+    ok(c.js("document.querySelector('#terminal .term-input').value") == 'nexus bateria ', 'TAB autocompleta «nexus ba» → bateria')
+    c.js("document.querySelector('#terminal .term-input').value = ''")
     # nexus directo en la terminal.
     c.js("""(() => { const i = document.querySelector('#terminal .term-input'); i.value = 'nexus red';
         document.querySelector('#terminal .term-linea').requestSubmit(); })()""")
@@ -452,7 +462,9 @@ def main():
             if a.red:
                 c.js('MoscaObrera.velocidad(6)')
                 red(c, ok)
-            errores = [e for e in c.errores() if 'favicon' not in e]
+            # Se ignoran ruidos del entorno headless (no son errores de la app): sin icono, y APIs que piden un toque real.
+            ruido = ('favicon', 'navigator.vibrate', "hasn't tapped", 'user gesture', 'user activation')
+            errores = [e for e in c.errores() if not any(x in e for x in ruido)]
             ok(not errores, 'sin errores en la consola' + ('' if not errores else ': ' + ' | '.join(errores[:5])))
         finally:
             proc.terminate()

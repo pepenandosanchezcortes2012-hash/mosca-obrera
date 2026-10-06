@@ -1,6 +1,7 @@
 /**
- * Mosca Obrera: la página. Une el cerebro, sus dos lugares (el laboratorio y la pantalla de trabajo), las vistas y
- * las conexiones; guarda la memoria en este dispositivo; lleva las misiones y el registro de trabajos.
+ * Mosca Obrera: la página. Une el cerebro, sus dos lugares (el laboratorio y la pantalla de trabajo), Mosca OS (su
+ * sistema de archivos y su terminal), las vistas y las conexiones; guarda todo en este dispositivo; lleva las misiones
+ * y el registro de trabajos.
  */
 (function () {
   'use strict';
@@ -9,9 +10,12 @@
   const Mundo = window.MoscaMundo;
   const Pantalla = window.MoscaPantalla;
   const Conexiones = window.MoscaConexiones;
+  const Sistema = window.MoscaSistema;
+  const Terminal = window.MoscaTerminal;
   const { VistaArena, VistaCerebro, VistaPantalla, EMOJI_ACCION, TEXTO_ACCION, colorOlor } = window.MoscaVista;
   const { normalizarOlor, OLORES, COMPARTIMENTOS } = Cerebro;
   const CLAVE = 'mosca-obrera:v1';
+  const CLAVE_FS = 'mosca-obrera:fs';
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
   /** Qué salida usa cada app de la pantalla. */
@@ -46,6 +50,10 @@
   const pantalla = new Pantalla(cerebro, Object.assign({ W: 600, H: 720, tocar: tocarDeVerdad }, reloj));
   if (guardado.stats) { Object.assign(mundo.stats, guardado.stats); }
   if (guardado.statsPantalla) { Object.assign(pantalla.stats, guardado.statsPantalla); }
+  // Mosca OS (se arma más abajo, cuando ya existen las conexiones).
+  let shell = null;
+  let terminal = null;
+  let sfs = null;
   // La mosca está en un solo lugar: el laboratorio o la pantalla.
   let activo = mundo;
   pantalla.salir();
@@ -55,7 +63,13 @@
     escribir({ v: 1, nombre, cerebro: cerebro.exportar(), config, registro: registro.slice(0, 60), marcador,
       misiones: Array.from(hechas), stats: mundo.stats, statsPantalla: pantalla.stats, modoReloj: activo.modoReloj,
       hora: activo.modoReloj === 'acelerado' ? activo.hora() : null, lugar: activo === pantalla ? 'pantalla' : 'lab',
-      pendientes: pantalla.pendientes().slice(0, 100), turnoAuto });
+      pendientes: pantalla.pendientes().slice(0, 100), turnoAuto, historia: shell ? shell.historia.slice(-100) : guardado.historia });
+    guardarFs();
+  }
+
+  function guardarFs() {
+    if (!sfs) { return; }
+    try { localStorage.setItem(CLAVE_FS, JSON.stringify(sfs.nodos)); } catch (e) { /* sin espacio: queda en memoria */ }
   }
   setInterval(guardar, 15000);
   window.addEventListener('pagehide', guardar);
@@ -302,12 +316,11 @@
     info.replaceChildren(b, document.createTextNode(r.texto));
   });
 
-  for (const b of $$('[data-vel]')) {
-    b.addEventListener('click', () => {
-      velocidad = Number(b.dataset.vel);
-      for (const o of $$('[data-vel]')) { o.setAttribute('aria-pressed', String(o === b)); }
-    });
+  function ponerVelocidad(v) {
+    velocidad = Math.max(0, Math.min(20, Number(v) || 0));
+    for (const o of $$('[data-vel]')) { o.setAttribute('aria-pressed', String(Number(o.dataset.vel) === velocidad)); }
   }
+  for (const b of $$('[data-vel]')) { b.addEventListener('click', () => ponerVelocidad(b.dataset.vel)); }
 
   const selReloj = $('#modo-reloj');
   selReloj.value = activo.modoReloj;
@@ -617,7 +630,9 @@
     { id: 'trabajo', titulo: 'Primer trabajo', pista: 'En «Su pantalla de trabajo», mándale un trabajo de prueba y mira adónde lo lleva.', ok: () => registro.some((e) => e.quien === 'mosca' && e.resultado === 'entregado') },
     { id: 'ensenar', titulo: 'Enséñale tú', pista: 'En su pantalla, toca un trabajo y después la app adonde va: aprende mirándote.', ok: () => pantalla.stats.porTi >= 1 },
     { id: 'conectada', titulo: 'Conectada', pista: 'Enciende una entrada (ntfy, cripto, clima o GitHub) y que le llegue un trabajo desde afuera.', ok: () => registro.some((c) => ['prueba', 'consola', 'enlace'].indexOf(c.fuente) < 0) },
-    { id: 'obrera', titulo: 'Obrera entrenada', pista: 'Califica sus trabajos (👍, o 👎 y adónde iba) hasta que acierte cinco seguidos.', ok: () => marcador.racha >= 5 }
+    { id: 'obrera', titulo: 'Obrera entrenada', pista: 'Califica sus trabajos (👍, o 👎 y adónde iba) hasta que acierte cinco seguidos.', ok: () => marcador.racha >= 5 },
+    { id: 'terminal', titulo: 'Hola, terminal', pista: 'En la terminal de Mosca OS escribe neofetch y después ls ~/bandeja.' },
+    { id: 'automatiza', titulo: 'Que trabaje sola', pista: 'Crea una tarea que se repita: cada 10m echo "#recordatorio toma agua" > ~/bandeja/agua.txt', ok: () => !!(shell && shell.tareas.length) }
   ];
 
   function completar(id) {
@@ -929,11 +944,144 @@
     estado: () => ({ nombre, lugar: activo === pantalla ? 'pantalla' : 'lab', accion: cerebro.accion(),
       interno: Object.assign({}, cerebro.interno), sueno: cerebro.sueno, stats: Object.assign({}, mundo.stats),
       pantalla: Object.assign({}, pantalla.stats), marcador: Object.assign({}, marcador), misiones: Array.from(hechas) }),
-    velocidad: (v) => { velocidad = Math.max(0, Math.min(20, Number(v) || 0)); },
+    velocidad: ponerVelocidad,
+    terminal: (l) => terminal.correr(l),
     cerebro,
     mundo,
     pantalla
   };
+
+  // ================================================================================================ Mosca OS
+  let nodosGuardados = null;
+  try { nodosGuardados = JSON.parse(localStorage.getItem(CLAVE_FS)); } catch (e) { nodosGuardados = null; }
+  sfs = new Sistema.SistemaArchivos(nodosGuardados);
+  let tFs = 0;
+  sfs.alCambiar = () => { clearTimeout(tFs); tFs = setTimeout(guardarFs, 400); };
+
+  /** Lo que la terminal puede hacer con la mosca y con tus conexiones. */
+  const entorno = {
+    Cerebro,
+    cerebro,
+    pantalla,
+    nombre: () => nombre,
+    cambiarNombre: (n) => {
+      nombre = String(n).trim().slice(0, 24) || nombrePorDefecto;
+      nombreInput.value = nombre;
+      guardar();
+    },
+    lugar: () => (activo === pantalla ? 'pantalla' : 'lab'),
+    hora: () => activo.hora(),
+    mudarA,
+    normalizar: normalizarOlor,
+    trabajo(texto, olor) {
+      const r = olor ? { tipo: 'carta', texto, olor: normalizarOlor(olor), fuente: 'terminal' } : Conexiones.interpretarMensaje({ texto, fuente: 'terminal' });
+      if (!r) { throw new Error('no entendí el trabajo'); }
+      aplicar(r, 'terminal');
+      if (r.tipo === 'estimulo') { return '🧪 estímulo en el laboratorio: ' + r.estimulo; }
+      if (r.tipo === 'feedback') { return '🧠 aprendió: #' + r.olor + (r.signo > 0 ? ' le interesa' : ' no le interesa'); }
+      return '✉️ le llegó un trabajo #' + r.olor;
+    },
+    pendientes: () => pantalla.pendientes(),
+    llevar: (id, app) => pantalla.llevar(id, app, 'tu'),
+    ensenarRuta: (o, app) => cerebro.condicionarMezcla(normalizarOlor(o), 'app-' + app, 1, 1.5),
+    conectada: (app) => !SALIDA[app] || config[SALIDA[app]].activo,
+    async enviarApp(app, texto) {
+      if (!texto) { throw new Error('no hay nada que mandar'); }
+      if (!SALIDA[app]) { return app === 'archivo' ? '🗂️ archivado' : '🗑️ a la papelera'; }
+      if (!config[SALIDA[app]].activo) { throw new Error(INFO_APP[app].emoji + ' ' + app + ' no está conectada (sección Conectar)'); }
+      const r = await conexiones.enviarA(SALIDA[app], { titulo: '🪰 ' + nombre + ' · terminal', texto, olor: 'terminal', evento: 'terminal' });
+      if (!r.ok) { throw new Error(r.detalle); }
+      return INFO_APP[app].emoji + ' ' + r.detalle;
+    },
+    olores: () => oloresAMostrar(),
+    registro: () => registro,
+    fetch: (u, o) => fetch(u, o),
+    async ntfy(tema, texto) {
+      const r = await fetch(config.ntfyServidor.replace(/\/+$/, '') + '/', { method: 'POST',
+        body: JSON.stringify({ topic: tema, title: '🪰 ' + nombre, message: texto, tags: [Conexiones.MARCA, 'fly'] }) });
+      if (!r.ok) { throw new Error('ntfy respondió ' + r.status); }
+    },
+    temaSalida: () => config.salidaNtfy.tema,
+    velocidad: ponerVelocidad,
+    premio: () => { if (activo !== mundo) { return false; } mundo.premio(); return true; },
+    castigo: () => { if (activo !== mundo) { return false; } mundo.castigo(); return true; },
+    procesos() {
+      const l = [];
+      if (config.entrada.activo) { l.push({ pid: 10, nombre: 'entrada-ntfy', estado: 'escuchando ' + config.entrada.tema }); }
+      if (config.cripto.activo) { l.push({ pid: 11, nombre: 'cripto', estado: config.cripto.monedas + ' (cada 2 min)' }); }
+      if (config.clima.activo) { l.push({ pid: 12, nombre: 'clima', estado: (config.clima.ciudad || '¿ciudad?') + ' (cada 10 min)' }); }
+      if (config.github.activo) { l.push({ pid: 13, nombre: 'github', estado: (config.github.repo || '¿repo?') + ' (cada 5 min)' }); }
+      if (ventanaPip) { l.push({ pid: 20, nombre: 'ventana-flotante', estado: 'abierta' }); }
+      return l;
+    },
+    matar(pid) {
+      const id = { 10: 'entrada', 11: 'cripto', 12: 'clima', 13: 'github' }[pid];
+      if (id && config[id].activo) {
+        config[id].activo = false;
+        $('[data-cfg="' + id + '.activo"]').checked = false;
+        if (id === 'entrada') { conexiones.escuchar(); } else { conexiones.fuentes(); }
+        if (id === 'clima') { quitarClima(); }
+        guardar();
+        return true;
+      }
+      if (pid === 20 && ventanaPip) { ventanaPip.close(); return true; }
+      return false;
+    },
+    salir: () => {
+      if (!document.body.classList.contains('modo-os')) { return false; }
+      salirModoApp();
+      return true;
+    }
+  };
+  shell = new Sistema.Shell(sfs, entorno);
+  if (Array.isArray(guardado.historia)) { shell.historia = guardado.historia.slice(-100); }
+  Sistema.montarMosca(sfs, shell, entorno);
+  terminal = new Terminal($('#terminal'), shell, pantalla);
+  terminal.alCorrer = (l) => {
+    if (/^\s*neofetch/.test(l)) { hechas.add('neofetch'); }
+    if (/^\s*ls\s+.*bandeja/.test(l) && hechas.has('neofetch')) { completar('terminal'); }
+    guardar();
+  };
+
+  // Las tareas de «cada» (como cron): corren mientras Mosca OS esté abierto, aunque la pestaña quede atrás.
+  let corriendoCada = false;
+  setInterval(() => {
+    if (corriendoCada || !shell.tareas.length) { return; }
+    corriendoCada = true;
+    shell.tick().then((corridas) => {
+      for (const c of corridas) { terminal.escribir('⏱ ' + c.linea, c.r.code === 0 ? 'tenue' : 'error'); }
+    }).catch(() => {}).then(() => { corriendoCada = false; });
+  }, 1000);
+
+  // ---------------------------------------------------------------------------------------------- modo app
+  function entrarModoApp(completa) {
+    document.body.classList.add('modo-os');
+    mudarA('pantalla');
+    const standalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+    if (completa && !standalone && document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+    setTimeout(ajustarPantalla, 60);
+  }
+  function salirModoApp() {
+    document.body.classList.remove('modo-os');
+    if (document.fullscreenElement && document.exitFullscreen) { document.exitFullscreen().catch(() => {}); }
+    setTimeout(() => { ajustarPantalla(); $('#oficina').scrollIntoView(); }, 60);
+  }
+  $('#modo-app').addEventListener('click', () => entrarModoApp(true));
+  $('#salir-os').addEventListener('click', salirModoApp);
+
+  let pedidoInstalar = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    pedidoInstalar = e;
+    $('#instalar').hidden = false;
+  });
+  $('#instalar').addEventListener('click', () => {
+    if (!pedidoInstalar) { return; }
+    pedidoInstalar.prompt();
+    pedidoInstalar.userChoice.then(() => { pedidoInstalar = null; $('#instalar').hidden = true; }, () => {});
+  });
 
   // ================================================================================================ arranque
   for (const n of $$('.n-neuronas')) { n.textContent = String(Cerebro.TOTAL_NEURONAS); }
@@ -953,6 +1101,8 @@
   conexiones.escuchar();
   conexiones.fuentes();
   leerHash();
+  const instalada = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+  if (new URLSearchParams(location.search).has('app') || instalada) { entrarModoApp(false); }
   if (!guardado.cerebro) { setTimeout(() => aviso('👇 Elige una herramienta abajo y toca la arena', 4000), 800); }
   if ('serviceWorker' in navigator && /^https:|^http:\/\/(localhost|127\.)/.test(location.href)) {
     navigator.serviceWorker.register('sw.js').catch(() => {});

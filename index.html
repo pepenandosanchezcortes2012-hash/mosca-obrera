@@ -10,11 +10,16 @@
 <meta property="og:description" content="Un cerebro de mosca de la fruta, vivo en tu navegador, que aprende y trabaja para ti.">
 <meta property="og:type" content="website">
 <link rel="icon" href="icono.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icono-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Mosca OS">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="estilo.css?v=4">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="estilo.css?v=6">
 </head>
 <body>
 <header class="barra">
@@ -32,7 +37,7 @@
     <div class="hero-texto">
       <p class="ceja">Drosophila melanogaster · <span class="n-neuronas">283</span> neuronas vivas en tu navegador</p>
       <h1>Un cerebro de mosca <em>que trabaja para ti</em></h1>
-      <p class="entrada">Juega con ella en el laboratorio y después dale su propia pantalla de trabajo. Ahí le llegan los mensajes de tus apps: los toca con la trompa, los lleva a la app que corresponde y aprende de ti qué va dónde.</p>
+      <p class="entrada">Juega con ella en el laboratorio y después dale su propio sistema: Mosca OS, con su pantalla de trabajo y una terminal tipo Linux que vive en tu celular. Le llegan los mensajes de tus apps, los toca con la trompa, los lleva a donde corresponde y aprende de ti qué va dónde.</p>
       <div class="cta">
         <a class="boton primario" href="#jugar">Despertar a la mosca</a>
         <a class="boton" href="#oficina">Ponla a trabajar</a>
@@ -117,9 +122,10 @@
 
   <section id="oficina" class="seccion">
     <div class="titulo-seccion">
-      <h2>Su pantalla de trabajo</h2>
-      <p>Una pantalla dentro de tu pantalla. Arriba le llegan los trabajos (lo que mandan tus apps, cada uno con su <code>#etiqueta</code>); abajo están sus apps. La mosca camina encima, agarra un trabajo con la trompa y lo lleva a la app que cree que corresponde. Si nadie le enseñó, lo archiva. Le enseñas corrigiéndola, o tocando tú un trabajo y luego una app: aprende mirándote.</p>
+      <h2>Mosca OS: su pantalla y su terminal</h2>
+      <p>Una pantalla dentro de tu pantalla, con una terminal como la de Termux debajo. Arriba le llegan los trabajos (lo que mandan tus apps, cada uno con su <code>#etiqueta</code>); abajo están sus apps. La mosca camina encima, agarra un trabajo con la trompa y lo lleva a la app que cree que corresponde. Si nadie le enseñó, lo archiva. Le enseñas corrigiéndola, o tocando tú un trabajo y luego una app: aprende mirándote. En la terminal sus trabajos son archivos (<code>~/bandeja</code>), sus apps son dispositivos (<code>/apps</code>) y su cerebro está en <code>/proc/mosca</code>.</p>
     </div>
+    <button class="chico salir-os" id="salir-os" type="button" aria-label="Salir del modo app">✕</button>
     <div class="oficina">
       <div class="oficina-col">
         <div class="lugar">
@@ -136,15 +142,25 @@
             </div>
           </div>
         </div>
+        <div class="terminal" id="terminal">
+          <div class="term-barra"><span>⌨️ termosca · mosh</span><span>ayuda · neofetch · top</span></div>
+          <div class="term-salida" role="log" aria-label="Salida de la terminal"></div>
+          <form class="term-linea" autocomplete="off"><span class="term-prompt"></span><input class="term-input" aria-label="Comando de la terminal" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send"></form>
+          <div class="term-teclas" aria-label="Teclas extra">
+            <button type="button" data-tecla="esc">ESC</button><button type="button" data-tecla="tab">TAB</button><button type="button" data-tecla="ctrl-c">^C</button><button type="button" data-tecla="arriba" aria-label="Anterior">↑</button><button type="button" data-tecla="abajo" aria-label="Siguiente">↓</button><button type="button" data-tecla="|">|</button><button type="button" data-tecla="/">/</button><button type="button" data-tecla="-">-</button><button type="button" data-tecla="~">~</button><button type="button" data-tecla="&gt;">&gt;</button>
+          </div>
+        </div>
         <form id="form-prueba" class="fila mandar">
           <input id="texto-prueba" aria-label="Texto del trabajo de prueba" value="#ventas Llegó un pedido nuevo">
           <button class="chico primario" type="submit">Mandarle un trabajo</button>
         </form>
         <div class="fila opciones-oficina">
-          <button class="chico" id="flotante" type="button">📺 Sacar en ventana flotante</button>
+          <button class="chico primario" id="modo-app" type="button">📱 Modo app (pantalla completa)</button>
+          <button class="chico" id="instalar" type="button" hidden>⬇️ Instalar Mosca OS</button>
+          <button class="chico" id="flotante" type="button">📺 Ventana flotante</button>
           <label class="regla"><input type="checkbox" id="turno-auto"> Que vaya sola a trabajar cuando llegue algo</label>
         </div>
-        <p class="ayuda" id="ayuda-flotante">La ventana flotante queda encima de todo mientras usas la compu (Chrome o Edge de escritorio).</p>
+        <p class="ayuda" id="ayuda-flotante">La ventana flotante queda encima de todo mientras usas la compu (Chrome o Edge de escritorio). En el celular, instálala como app: en Android, «Instalar Mosca OS» (o el menú ⋮ → Instalar app); en iPhone, Compartir → Agregar a inicio. Funciona sin internet y todo se guarda en tu celular.</p>
       </div>
       <div class="panel registro-panel">
         <h3>Trabajos hechos</h3>
@@ -317,9 +333,11 @@
 <noscript><p class="sin-js">La mosca necesita JavaScript para vivir.</p></noscript>
 <script src="js/cerebro.js?v=2"></script>
 <script src="js/mundo.js?v=2"></script>
-<script src="js/pantalla.js?v=2"></script>
+<script src="js/pantalla.js?v=3"></script>
+<script src="js/sistema.js?v=2"></script>
 <script src="js/vista.js?v=4"></script>
+<script src="js/terminal.js?v=1"></script>
 <script src="js/conexiones.js?v=2"></script>
-<script src="js/app.js?v=2"></script>
+<script src="js/app.js?v=3"></script>
 </body>
 </html>

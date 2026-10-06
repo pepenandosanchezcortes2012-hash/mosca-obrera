@@ -329,6 +329,73 @@ input:focus, select:focus, button:focus-visible, a:focus-visible { outline: 2px 
 }
 .aviso-arena-fuera[hidden] { display: none; }
 .hueco-pip { text-align: center; padding: 40px 16px; color: var(--suave); }
+/* ------------------------------------------------------------------ terminal (termosca) */
+.terminal {
+  display: flex; flex-direction: column; height: 380px; overflow: hidden; color: #d5dde5;
+  background: #040506; border: 1px solid #1f2a36; border-radius: 16px;
+  font: 13px/1.45 ui-monospace, 'Cascadia Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+}
+.term-barra {
+  display: flex; justify-content: space-between; gap: 10px; padding: 6px 12px; background: #0b1016; color: #6b7a8c;
+  font: 600 0.74rem system-ui, sans-serif; white-space: nowrap; overflow: hidden;
+}
+.term-salida { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tl { min-height: 1.45em; }
+.tl.error { color: #ff7b7b; }
+.tl.nota { color: #9fd8c0; }
+.tl.tenue { color: #6b7a8c; }
+.tl.vivo { margin: 0; font: inherit; color: #cfe8d8; white-space: pre; overflow-x: auto; }
+.tl.de-mosca { color: var(--ambar-2); }
+.term-u { color: #4fe0b0; font-weight: 700; }
+.term-r { color: #7aa2ff; font-weight: 700; }
+.term-s { color: #d5dde5; }
+.de-mosca .term-u { color: var(--ambar); }
+.term-com { color: #5d6b7c; }
+.term-linea { display: flex; align-items: center; gap: 6px; padding: 6px 12px 8px; border-top: 1px solid #121a23; }
+.term-prompt { white-space: nowrap; }
+.terminal .term-linea .term-input {
+  flex: 1; min-width: 0; background: transparent; border: 0; border-radius: 0; padding: 2px 0; color: #fff;
+  font: inherit; font-size: 15px; caret-color: #4fe0b0; outline: none;
+}
+.terminal.ocupada .term-prompt { opacity: 0.4; }
+.term-teclas { display: grid; grid-template-columns: repeat(10, 1fr); background: #0b1016; border-top: 1px solid #121a23; }
+.term-teclas button {
+  background: none; border: 0; color: #cfd8e3; padding: 10px 0; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  font: 700 0.8rem ui-monospace, Menlo, Consolas, monospace;
+}
+.term-teclas button:active { background: #18222d; }
+
+/* ------------------------------------------------------------------ modo app: Mosca OS a pantalla completa */
+.salir-os { display: none; }
+body.modo-os { overflow: hidden; }
+body.modo-os .barra, body.modo-os .hero, body.modo-os #jugar, body.modo-os #trabajo, body.modo-os #ciencia, body.modo-os #api,
+body.modo-os .pie, body.modo-os #oficina > .titulo-seccion, body.modo-os .lugar, body.modo-os .mandar, body.modo-os .opciones-oficina,
+body.modo-os #ayuda-flotante, body.modo-os .registro-panel, body.modo-os .hueco-pip { display: none !important; }
+body.modo-os #oficina {
+  position: fixed; inset: 0; z-index: 50; max-width: none; margin: 0; background: #000;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+body.modo-os .oficina, body.modo-os .oficina-col { height: 100%; gap: 0; }
+body.modo-os .oficina { display: flex; }
+body.modo-os .oficina-col { flex: 1; min-width: 0; }
+body.modo-os .dispositivo {
+  flex: 1 1 54%; min-height: 0; max-width: none; margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none;
+  display: flex; flex-direction: column;
+}
+body.modo-os .pantalla-os { border-radius: 0; flex: 1; min-height: 0; }
+body.modo-os .barra-os { padding-right: 46px; }
+body.modo-os .zona { aspect-ratio: auto; flex: 1; min-height: 0; }
+body.modo-os .terminal { flex: 1 1 46%; height: auto; min-height: 0; border: 0; border-top: 1px solid #1f2a36; border-radius: 0; }
+body.modo-os .salir-os {
+  display: block; position: fixed; z-index: 60; top: calc(env(safe-area-inset-top) + 4px); right: 6px;
+  padding: 2px 9px; font-size: 0.85rem; background: rgba(0, 0, 0, 0.5);
+}
+@media (orientation: landscape) and (min-width: 800px) {
+  body.modo-os .oficina-col { flex-direction: row; }
+  body.modo-os .dispositivo { flex: 1 1 55%; }
+  body.modo-os .terminal { flex: 1 1 45%; border-top: 0; border-left: 1px solid #1f2a36; }
+}
+
 /* La pantalla sola en la ventana flotante. */
 body.en-pip { margin: 0; background: #06090d; overflow: hidden; }
 body.en-pip .dispositivo { max-width: none; height: 100vh; border-radius: 0; padding: 0; border: 0; }
@@ -355,6 +422,8 @@ body.en-pip .zona { aspect-ratio: auto; flex: 1; }
 
 /* ------------------------------------------------------------------ pantallas grandes */
 @media (max-width: 560px) {
+  .terminal { height: 340px; font-size: 12.5px; }
+  .terminal .term-linea .term-input { font-size: 16px; }
   .os-icono { font-size: 1.45rem; }
   .os-nombre { font-size: 0.66rem; }
   .os-app.apagada .os-off { display: none; }

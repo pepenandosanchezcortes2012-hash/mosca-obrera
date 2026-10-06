@@ -1,6 +1,6 @@
 # 🪰 Mosca Obrera
 
-Un cerebro de mosca de la fruta (*Drosophila melanogaster*) que vive en tu navegador. Juegas con ella en el laboratorio y después le das su propia **pantalla de trabajo**: una pantalla dentro de tu pantalla, donde le llegan los mensajes de tus apps. Los toca con la trompa, los lleva a la app que corresponde y aprende de ti qué va dónde.
+Un cerebro de mosca de la fruta (*Drosophila melanogaster*) que vive en tu navegador. Juegas con ella en el laboratorio y después le das su propio sistema, **Mosca OS**: una pantalla de trabajo donde le llegan los mensajes de tus apps (los toca con la trompa y los lleva a donde corresponde) y una **terminal tipo Linux**, como Termux, que se instala en tu celular y funciona sin internet.
 
 **En vivo:** https://pepenandosanchezcortes2012-hash.github.io/mosca-obrera/
 
@@ -36,6 +36,26 @@ Arriba le llegan los **trabajos** (cada uno huele a su `#etiqueta`); abajo está
 - **Le enseñas de tres formas:** 👍 (le pagas con azúcar), 👎 + «adónde iba» (lo reenvía ahí y aprende), o tocando tú un trabajo y luego una app (aprende mirándote). Lo que ya no le interesa lo ignora y se va a la papelera.
 - **Ventana flotante:** en Chrome o Edge de escritorio, su pantalla sale a una ventana que queda encima de todo mientras usas la compu.
 
+## La terminal de Mosca OS (mosh)
+
+Una shell con los comandos de siempre (`ls cd cat echo grep head tail sort uniq wc tee cp mv rm mkdir`, tuberías `|`, `>`, `>>`, `&&`, `;`, `$VARIABLES`, comodines, historial, TAB) donde todo está conectado a la mosca:
+
+```sh
+echo "Llegó un pedido" > ~/bandeja/ventas.txt     # le llega un trabajo #ventas
+ls ~/bandeja                                      # sus trabajos pendientes son archivos
+mv ~/bandeja/ventas-ab12.txt /apps/celular        # lo llevas tú; ella aprende mirándote
+echo "hola" > /apps/celular                       # las apps son dispositivos: notificación a tu celular
+cat /proc/mosca/estado                            # su cerebro en vivo (también: rutas, valencias, neuronas…)
+top                                               # sus neuronas descendentes en vivo
+ruta ventas celular                               # enséñale adónde va un tema
+cada 10m curl -s https://… > ~/bandeja/precio.txt # una tarea que se repite sola (como cron)
+tail /var/log/mosca.log                           # lo que hizo
+```
+
+Lo que hace la mosca aparece en la terminal como comandos suyos (`🪰 mosca@moscaos:~$ mv ~/bandeja/… /apps/celular`). No es un Linux de verdad (no hay kernel ni Python): es una shell hecha para ella, y todo se guarda en tu dispositivo.
+
+**En el celular:** «Modo app» la pone a pantalla completa (la pantalla de la mosca arriba y la terminal abajo, con la fila de teclas de Termux). Para instalarla: en Android, «Instalar Mosca OS» o el menú ⋮ → Instalar app; en iPhone, Compartir → Agregar a inicio. Después abre sin internet.
+
 ## Conectarla
 
 Los trabajos le llegan por el canal de entrada de [ntfy](https://ntfy.sh) (cualquier app que haga un POST), del mercado cripto (CoinGecko), del clima de tu ciudad (Open-Meteo) o de un repo de GitHub. Cada app de su pantalla sale de verdad por su conexión.
@@ -55,11 +75,12 @@ Trabaja mientras la página esté abierta. Lo que aprende se guarda en el dispos
 
 ## Desarrollo
 
-Sin dependencias ni compilación: HTML, CSS y JavaScript. El cerebro (`js/cerebro.js`), la arena (`js/mundo.js`), la pantalla de trabajo (`js/pantalla.js`) y los mensajes (`js/conexiones.js`) también corren en Node.
+Sin dependencias ni compilación: HTML, CSS y JavaScript. El cerebro (`js/cerebro.js`), la arena (`js/mundo.js`), la pantalla de trabajo (`js/pantalla.js`), Mosca OS (`js/sistema.js`: archivos y shell) y los mensajes (`js/conexiones.js`) también corren en Node.
 
 ```sh
-node --test tests/mosca.test.js         # comportamiento: comer, huir, aprender, examen en T, la pantalla de trabajo…
-py herramientas/probar.py               # la página en Chrome sin ventana (toques reales, 👎, enseñarle) con capturas
+node --test "tests/*.test.js"           # la mosca (comer, huir, aprender, la pantalla de trabajo) y la shell
+py herramientas/probar.py               # la página en Chrome sin ventana: toques reales, terminal, modo app, sin internet
+py herramientas/iconos.py               # los íconos PNG de la app, a partir de icono.svg
 py herramientas/probar.py --red         # además: ntfy de ida y vuelta, CoinGecko, Open-Meteo y GitHub de verdad
 ```
 

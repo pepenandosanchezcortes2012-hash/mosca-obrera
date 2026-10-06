@@ -225,6 +225,23 @@
       return true;
     }
 
+    /**
+     * Lleva un trabajo (en la pantalla, en sus patas o esperando en la fila) a una app, como si lo hicieras tú: lo
+     * usa la terminal (mv ~/bandeja/… /apps/x, rm ~/bandeja/…). Devuelve false si no existe.
+     */
+    llevar(id, app, quien) {
+      const a = this.apps.find((x) => x.app === app);
+      if (!a) { return false; }
+      let o = this.objetos.find((x) => x.tipo === 'carta' && x.trabajo.id === id);
+      if (!o) {
+        const i = this.cola.findIndex((t) => t.id === id);
+        if (i < 0) { return false; }
+        o = { trabajo: this.cola.splice(i, 1)[0], x: a.x, y: a.y };
+      }
+      this._entregar(a, quien || 'tu', o);
+      return true;
+    }
+
     _agarrar(o) {
       this.carga = o;
       o.slot = -1;

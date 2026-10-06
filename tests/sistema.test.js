@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const Cerebro = require('../js/cerebro.js');
 const Pantalla = require('../js/pantalla.js');
 const Conexiones = require('../js/conexiones.js');
+const Copiloto = require('../js/copiloto.js');
 const { SistemaArchivos, Shell, montarMosca, lexer, analizar, nombreTrabajo, intervalo, HOME } = require('../js/sistema.js');
 
 /** Un Mosca OS completo con una mosca de verdad y las salidas de mentira (lo que se «envía» queda en enviados). */
@@ -47,7 +48,21 @@ function os(semilla) {
     cambiarNombre: () => {},
     procesos: () => [],
     matar: () => false,
-    salir: () => false
+    salir: () => false,
+    copiloto: (texto) => Copiloto.interpretar(texto, {}),
+    dispositivo: {
+      _portapapeles: '',
+      _despierta: false,
+      _vibro: 0,
+      async bateria() { return '🔋 84 % (cargando)'; },
+      async ubicacion() { return '📍 4.6097, -74.0817  ·  https://maps.google.com/?q=4.6097,-74.0817'; },
+      red() { return '📶 wifi · en línea'; },
+      async vibrar() { this._vibro += 1; return '📳 bzz'; },
+      async copiar(t) { this._portapapeles = t; return '📋 copiado: ' + t; },
+      async pegar() { return '📋 ' + (this._portapapeles || '(vacío)'); },
+      async compartir(t) { return '📤 compartido: ' + t; },
+      async despierta(on) { this._despierta = on; return on ? '☀️ pantalla encendida' : '🌙 liberada'; }
+    }
   };
   const fs = new SistemaArchivos();
   const sh = new Shell(fs, ent);
@@ -187,6 +202,57 @@ test('mosca y compañía: estado, top, neofetch, kill 1, sudo, nano, python', as
   assert.match((await run('curl -s https://api.ejemplo.com | grep -c usd')).out, /^1$/m);
   assert.match((await run('ayuda')).out, /La mosca:/);
   assert.match((await run('ls /bin')).out, /mosca/);
+});
+
+test('nexus: control del teléfono por las APIs del navegador', async () => {
+  const { run, ent } = os();
+  assert.match((await run('nexus bateria')).out, /84 %/);
+  assert.match((await run('nexus ubicacion')).out, /4\.6097/);
+  assert.match((await run('nexus red')).out, /en línea/);
+  await run('nexus copiar hola mosca');
+  assert.equal(ent.dispositivo._portapapeles, 'hola mosca');
+  assert.match((await run('nexus pegar')).out, /hola mosca/);
+  await run('nexus despierta on');
+  assert.equal(ent.dispositivo._despierta, true);
+  await run('nexus despierta off');
+  assert.equal(ent.dispositivo._despierta, false);
+  // Lo que es del núcleo nativo se anuncia, no se inventa.
+  assert.match((await run('nexus tocar 540 1200')).out, /nativo/);
+  assert.match((await run('nexus notifs')).out, /ARQUITECTURA-NATIVA/);
+});
+
+test('/dev/tel: el teléfono también como archivos', async () => {
+  const { run, ent } = os();
+  assert.match((await run('ls /dev/tel')).out, /vibrar/);
+  await run('echo bzz > /dev/tel/vibrar');
+  assert.equal(ent.dispositivo._vibro, 1);
+  await run('echo "para la nota" > /dev/tel/portapapeles');
+  assert.equal(ent.dispositivo._portapapeles, 'para la nota');
+});
+
+test('haz (copiloto): traduce español a comandos y los corre', async () => {
+  const { run, pantalla, enviados } = os();
+  let r = await run('haz manda hola a discord');
+  assert.match(r.out, /mando «hola» a discord/);
+  assert.match(r.out, /echo "hola" > \/apps\/discord/);
+  assert.equal(enviados[enviados.length - 1][0], 'discord');
+  await run('haz las facturas van al webhook');
+  assert.ok(pantalla.valorRuta('facturas', 'webhook') > 0.1, 'aprendió la ruta por el copiloto');
+  r = await run('haz cuánta batería tengo');
+  assert.match(r.out, /84 %/);
+  await run('haz cada 10s manda hola a discord');
+  assert.match((await run('cada')).out, /echo "hola" > \/apps\/discord/);
+  assert.match((await run('haz ablublu')).out, /🤖/);
+});
+
+test('copiloto: entiende lo común (unidad por separado)', () => {
+  const c = (t) => Copiloto.interpretar(t).comandos.join(' | ');
+  assert.match(c('cada mañana mándame el precio de bitcoin'), /^cada 24h curl .*bitcoin.* > ~\/bandeja\//);
+  assert.equal(c('enséñale que ventas va al celular'), 'ruta ventas celular');
+  assert.equal(c('anota comprar pan'), 'echo "comprar pan" >> ~/notas.txt');
+  assert.equal(c('vibra'), 'nexus vibrar');
+  assert.equal(c('abre whatsapp'), 'nexus abrir "whatsapp"');
+  assert.equal(Copiloto.interpretar('qwerty zxcvb').ok, false);
 });
 
 test('autocompletar comandos y rutas', async () => {

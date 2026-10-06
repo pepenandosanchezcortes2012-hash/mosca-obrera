@@ -147,6 +147,32 @@ def terminal(c, ok, caps):
     ok(llego, 'la tarea corrió sola y le mandó un trabajo #recordatorio')
     escribir('kill 101; ps', 0.4)
     ok('cada 10s' not in texto().split('kill 101')[-1], 'kill detiene la tarea')
+    # El copiloto: lenguaje natural → comandos, y el puente al teléfono (APIs del navegador).
+    c.cmd('Browser.grantPermissions', permissions=['clipboardReadWrite', 'clipboardSanitizedWrite'])
+    def copiloto(frase, espera=1.2):
+        c.js("""(() => { const i = document.getElementById('copiloto-texto'); i.value = %s;
+            document.getElementById('form-copiloto').requestSubmit(); })()""" % json.dumps(frase))
+        c.esperar(espera)
+    antes = c.js("document.getElementById('registro').innerText")
+    copiloto('manda hola desde el copiloto a discord')
+    ok('echo' in texto() and '/apps/discord' in texto(), 'el copiloto traduce «manda … a discord» a un comando')
+    copiloto('cuánta batería tengo')
+    ok('🔋' in texto(), 'el copiloto lee la batería real del dispositivo (%s)' % ('🔋' in texto()))
+    copiloto('las facturas van al webhook')
+    ok(c.js("MoscaObrera.pantalla.destinoPara('facturas')") == 'webhook', 'el copiloto le enseñó que #facturas → webhook')
+    copiloto('cada 10s mándame el precio de bitcoin')
+    ok('tarea 1' in texto() or 'cada 10s' in texto(), 'el copiloto creó una tarea que se repite')
+    # nexus directo en la terminal.
+    c.js("""(() => { const i = document.querySelector('#terminal .term-input'); i.value = 'nexus red';
+        document.querySelector('#terminal .term-linea').requestSubmit(); })()""")
+    c.esperar(0.5)
+    ok('📶' in c.js("document.querySelector('#terminal .term-salida').innerText"), 'nexus red responde desde el navegador')
+    c.js("""(() => { const i = document.querySelector('#terminal .term-input'); i.value = 'nexus tocar 100 200';
+        document.querySelector('#terminal .term-linea').requestSubmit(); })()""")
+    c.esperar(0.4)
+    ok('nativo' in c.js("document.querySelector('#terminal .term-salida').innerText"), 'nexus tocar avisa que es del núcleo nativo')
+    ok(c.js("MoscaObrera.estado().misiones.includes('copiloto')"), 'misión «Háblale normal» cumplida')
+    c.captura(caps / 'cel-11-copiloto.png')
     # Modo app: pantalla completa con la pantalla arriba y la terminal abajo.
     c.js("document.getElementById('modo-app').click()")
     c.esperar(0.8)

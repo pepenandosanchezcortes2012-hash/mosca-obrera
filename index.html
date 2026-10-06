@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="estilo.css?v=6">
+<link rel="stylesheet" href="estilo.css?v=7">
 </head>
 <body>
 <header class="barra">
@@ -141,6 +141,18 @@
               <div class="os-ausente" id="os-ausente"><p>La mosca está en el laboratorio.</p><button class="chico primario" type="button" data-mudar="pantalla">💼 Traerla a trabajar</button></div>
             </div>
           </div>
+        </div>
+        <form id="form-copiloto" class="copiloto">
+          <span class="copiloto-icono" aria-hidden="true">🤖</span>
+          <input id="copiloto-texto" placeholder="Dile en español: «manda hola a discord», «cuánta batería»…" aria-label="Dile al copiloto qué hacer" autocomplete="off">
+          <button class="chico primario" type="submit">Hazlo</button>
+        </form>
+        <div class="copiloto-ejemplos">
+          <button type="button" class="chip" data-copiloto="cuánta batería tengo">batería</button>
+          <button type="button" class="chip" data-copiloto="dónde estoy">ubicación</button>
+          <button type="button" class="chip" data-copiloto="manda hola a discord">manda a discord</button>
+          <button type="button" class="chip" data-copiloto="cada mañana mándame el precio de bitcoin">precio BTC cada día</button>
+          <button type="button" class="chip" data-copiloto="qué tengo pendiente">qué hay pendiente</button>
         </div>
         <div class="terminal" id="terminal">
           <div class="term-barra"><span>⌨️ termosca · mosh</span><span>ayuda · neofetch · top</span></div>
@@ -334,10 +346,11 @@
 <script src="js/cerebro.js?v=2"></script>
 <script src="js/mundo.js?v=2"></script>
 <script src="js/pantalla.js?v=3"></script>
-<script src="js/sistema.js?v=2"></script>
+<script src="js/sistema.js?v=3"></script>
+<script src="js/copiloto.js?v=1"></script>
 <script src="js/vista.js?v=4"></script>
-<script src="js/terminal.js?v=1"></script>
+<script src="js/terminal.js?v=2"></script>
 <script src="js/conexiones.js?v=2"></script>
-<script src="js/app.js?v=3"></script>
+<script src="js/app.js?v=4"></script>
 </body>
 </html>

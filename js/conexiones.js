@@ -101,7 +101,8 @@
       navegador: { activo: false },
       cripto: { activo: false, monedas: 'bitcoin', umbral: 1 },
       clima: { activo: false, ciudad: '', lat: null, lon: null },
-      github: { activo: false, repo: '' }
+      github: { activo: false, repo: '' },
+      copiloto: { url: '' }
     };
   }
 

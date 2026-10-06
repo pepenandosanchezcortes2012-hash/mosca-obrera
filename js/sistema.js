@@ -404,6 +404,8 @@
         ['Archivos', 'ls cd pwd cat echo touch mkdir rm cp mv tee'],
         ['Texto', 'head tail grep wc sort uniq seq'],
         ['La mosca', 'mosca trabajo ruta top neofetch fortuna'],
+        ['Copiloto', 'haz'],
+        ['El teléfono', 'nexus'],
         ['Red', 'curl ntfy'],
         ['Sistema', 'ps kill free uptime date cada sh env export history clear whoami uname sleep']
       ];
@@ -719,6 +721,62 @@
       await c.ent.ntfy(tema, texto);
       return '🔔 enviado a ntfy.sh/' + tema + '\n';
     } },
+    haz: { ayuda: 'dile en español qué hacer (copiloto)', uso: 'haz una orden en español…',
+      mas: ['  haz cada mañana mándame el precio de bitcoin',
+        '  haz manda hola a discord · haz las facturas van al webhook',
+        '  haz cuánta batería tengo · haz qué tengo pendiente',
+        'El copiloto traduce lo que dices a comandos y los corre. No ejecuta nada sin mostrártelo.'],
+      async fn(c) {
+        const texto = c.args.join(' ').trim() || c.stdin.trim();
+        if (!texto) { return 'dime qué hacer, p. ej.:  haz manda hola a discord\n'; }
+        if (!c.ent.copiloto) { return { err: 'el copiloto no está disponible aquí\n', code: 1 }; }
+        const r = await c.ent.copiloto(texto, c.ent);
+        if (!r || r.ok === false) { return '🤖 ' + ((r && r.pregunta) || 'no te entendí') + '\n'; }
+        let out = r.di ? '🤖 ' + r.di + '\n' : '';
+        let err = '';
+        let code = 0;
+        for (const cmd of (r.comandos || [])) {
+          out += '$ ' + cmd + '\n';
+          const rr = await c.sh.ejecutar(cmd, { fondo: true });
+          out += rr.out;
+          out += rr.nota ? rr.nota : '';
+          err += rr.err;
+          code = rr.code;
+          if (c.sh.cancelado) { break; }
+        }
+        return { out, err, code };
+      } },
+    nexus: { ayuda: 'controla el teléfono (nexus-ctl)', uso: 'nexus bateria|ubicacion|red|vibrar|copiar TEXTO|pegar|compartir TEXTO|despierta on|off',
+      mas: ['En el navegador uso las APIs de tu teléfono (con tu permiso):',
+        '  bateria · ubicacion · red · vibrar · copiar TEXTO · pegar · compartir TEXTO · despierta on|off',
+        'Lo que pide el núcleo nativo Mosca OS (Shizuku/Accesibilidad), aquí solo se anuncia:',
+        '  tocar X Y · escribir TEXTO · abrir APP · notifs · apps',
+        'Ver ARQUITECTURA-NATIVA.md (misma orden, web y nativo).'],
+      async fn(c) {
+        const d = c.ent.dispositivo;
+        if (!d) { return { err: 'nexus: el puente del teléfono no está disponible aquí\n', code: 1 }; }
+        const sub = (c.args[0] || 'estado').toLowerCase();
+        const resto = c.args.slice(1).join(' ') || c.stdin.trim();
+        const nativo = (q) => ({ out: '⚠️ ' + q + ' lo cumple Mosca OS nativo (nexus-ctl con Shizuku/Accesibilidad). En el navegador no se puede tocar otras apps.\nVer ARQUITECTURA-NATIVA.md\n', code: 0 });
+        try {
+          switch (sub) {
+            case 'estado': return 'nexus-ctl · el puente al teléfono\n' +
+              'web (ya funciona): bateria ubicacion red vibrar copiar pegar compartir despierta\n' +
+              'núcleo nativo: tocar escribir abrir notifs apps  (ver ARQUITECTURA-NATIVA.md)\n';
+            case 'bateria': return (await d.bateria()) + '\n';
+            case 'ubicacion': case 'ubicación': return (await d.ubicacion()) + '\n';
+            case 'red': return (await d.red()) + '\n';
+            case 'vibrar': return (await d.vibrar(resto)) + '\n';
+            case 'copiar': if (!resto) { throw error('uso: nexus copiar TEXTO'); } return (await d.copiar(resto)) + '\n';
+            case 'pegar': return (await d.pegar()) + '\n';
+            case 'compartir': if (!resto) { throw error('uso: nexus compartir TEXTO'); } return (await d.compartir(resto)) + '\n';
+            case 'despierta': return (await d.despierta(resto !== 'off' && resto !== '0')) + '\n';
+            case 'tocar': case 'escribir': case 'abrir': case 'notifs': case 'notificaciones': case 'apps':
+              return d.nativo ? ((await d.nativo(sub, resto)) + '\n') : nativo('«nexus ' + sub + '»');
+            default: return { err: 'nexus: no sé «' + sub + '» (ayuda nexus)\n', code: 1 };
+          }
+        } catch (e) { return { err: 'nexus ' + sub + ': ' + e.message + '\n', code: 1 }; }
+      } },
     sudo: { ayuda: 'no hay', uso: 'sudo', fn: () => ({ err: '🪰 En Mosca OS no hay superusuario: aquí manda la dopamina.\n', code: 1 }) },
     exit: { ayuda: 'sale del modo app', uso: 'exit', fn(c) {
       if (c.ent.salir && c.ent.salir()) { return 'chao 👋\n'; }
@@ -730,7 +788,7 @@
   };
   const ALIAS = { help: 'ayuda', man: 'ayuda', ll: 'ls', dir: 'ls', cls: 'clear', type: 'which', nano: 'editor', vim: 'editor',
     vi: 'editor', emacs: 'editor', apt: 'pkg', 'apt-get': 'pkg', python: 'nolinux', python3: 'nolinux', node: 'nolinux',
-    bash: 'nolinux', zsh: 'nolinux', git: 'nolinux', ssh: 'nolinux', crontab: 'cada', cron: 'cada', fortune: 'fortuna' };
+    bash: 'nolinux', zsh: 'nolinux', git: 'nolinux', ssh: 'nolinux', crontab: 'cada', cron: 'cada', fortune: 'fortuna', copiloto: 'haz', ia: 'haz', tel: 'nexus', 'nexus-ctl': 'nexus' };
   const OCULTOS = ['editor', 'nolinux'];
 
   function citar(a) { return /[\s|;&>'"$]/.test(a) ? "'" + a.replace(/'/g, "'\\''") + "'" : a; }
@@ -1151,6 +1209,30 @@
       listar: () => [{ nombre: 'null', tipo: 'dev', tam: 0 }, { nombre: 'zumbido', tipo: 'dev', tam: 0 }],
       leer: (s) => (s === 'null' ? '' : (s === 'zumbido' ? 'bzz' + 'z'.repeat(Math.floor(Math.random() * 12)) + '\n' : null)),
       escribir: () => ''
+    });
+    // /dev/tel: el teléfono, también como archivos (cat la lee, echo > la usa). Lo mismo que «nexus».
+    const TEL_LEE = { bateria: 'bateria', 'ubicacion': 'ubicacion', red: 'red', portapapeles: 'pegar' };
+    const TEL_ESC = { vibrar: 'vibrar', portapapeles: 'copiar', compartir: 'compartir', despierta: 'despierta' };
+    fs.montar('/dev/tel', {
+      tipo: (sub) => ((TEL_LEE[sub] || TEL_ESC[sub]) ? 'dev' : null),
+      listar: () => ['bateria', 'ubicacion', 'red', 'portapapeles', 'vibrar', 'compartir', 'despierta']
+        .map((n) => ({ nombre: n, tipo: 'dev', tam: 0 })),
+      leer(sub) {
+        const d = ent.dispositivo;
+        if (!d || !TEL_LEE[sub]) { return TEL_ESC[sub] ? '(escribe aquí: echo … > /dev/tel/' + sub + ')\n' : null; }
+        // Síncrono para cat: devuelve lo último conocido o una pista (nexus da el valor en vivo).
+        return 'usa:  nexus ' + TEL_LEE[sub] + '\n';
+      },
+      async escribir(sub, texto) {
+        const d = ent.dispositivo;
+        if (!d || !TEL_ESC[sub]) { throw error('no se puede escribir ahí'); }
+        const t = String(texto).trim();
+        if (sub === 'vibrar') { return d.vibrar(t); }
+        if (sub === 'portapapeles') { return d.copiar(t); }
+        if (sub === 'compartir') { return d.compartir(t); }
+        if (sub === 'despierta') { return d.despierta(t !== 'off' && t !== '0'); }
+        return '';
+      }
     });
   }
 

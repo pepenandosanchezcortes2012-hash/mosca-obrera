@@ -329,6 +329,14 @@ input:focus, select:focus, button:focus-visible, a:focus-visible { outline: 2px 
 }
 .aviso-arena-fuera[hidden] { display: none; }
 .hueco-pip { text-align: center; padding: 40px 16px; color: var(--suave); }
+/* ------------------------------------------------------------------ copiloto */
+.copiloto { display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--borde); border-radius: 14px; padding: 7px 10px; }
+.copiloto-icono { font-size: 1.2rem; }
+.copiloto input { flex: 1; min-width: 0; background: transparent; border: 0; padding: 4px 0; font-size: 15px; color: var(--texto); outline: none; }
+.copiloto-ejemplos { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0 2px; }
+.chip { background: var(--panel-2); border: 1px solid var(--borde); color: var(--suave); border-radius: 999px; padding: 4px 11px; font-size: 0.8rem; cursor: pointer; }
+.chip:hover { border-color: var(--ambar); color: var(--texto); }
+
 /* ------------------------------------------------------------------ terminal (termosca) */
 .terminal {
   display: flex; flex-direction: column; height: 380px; overflow: hidden; color: #d5dde5;
@@ -370,7 +378,7 @@ input:focus, select:focus, button:focus-visible, a:focus-visible { outline: 2px 
 body.modo-os { overflow: hidden; }
 body.modo-os .barra, body.modo-os .hero, body.modo-os #jugar, body.modo-os #trabajo, body.modo-os #ciencia, body.modo-os #api,
 body.modo-os .pie, body.modo-os #oficina > .titulo-seccion, body.modo-os .lugar, body.modo-os .mandar, body.modo-os .opciones-oficina,
-body.modo-os #ayuda-flotante, body.modo-os .registro-panel, body.modo-os .hueco-pip { display: none !important; }
+body.modo-os #ayuda-flotante, body.modo-os .registro-panel, body.modo-os .hueco-pip, body.modo-os .copiloto-ejemplos { display: none !important; }
 body.modo-os #oficina {
   position: fixed; inset: 0; z-index: 50; max-width: none; margin: 0; background: #000;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
@@ -385,6 +393,7 @@ body.modo-os .dispositivo {
 body.modo-os .pantalla-os { border-radius: 0; flex: 1; min-height: 0; }
 body.modo-os .barra-os { padding-right: 46px; }
 body.modo-os .zona { aspect-ratio: auto; flex: 1; min-height: 0; }
+body.modo-os .copiloto { border-radius: 0; border-left: 0; border-right: 0; }
 body.modo-os .terminal { flex: 1 1 46%; height: auto; min-height: 0; border: 0; border-top: 1px solid #1f2a36; border-radius: 0; }
 body.modo-os .salir-os {
   display: block; position: fixed; z-index: 60; top: calc(env(safe-area-inset-top) + 4px); right: 6px;

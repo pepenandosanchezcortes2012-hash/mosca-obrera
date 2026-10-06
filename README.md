@@ -36,6 +36,32 @@ Arriba le llegan los **trabajos** (cada uno huele a su `#etiqueta`); abajo está
 - **Le enseñas de tres formas:** 👍 (le pagas con azúcar), 👎 + «adónde iba» (lo reenvía ahí y aprende), o tocando tú un trabajo y luego una app (aprende mirándote). Lo que ya no le interesa lo ignora y se va a la papelera.
 - **Ventana flotante:** en Chrome o Edge de escritorio, su pantalla sale a una ventana que queda encima de todo mientras usas la compu.
 
+## El copiloto: háblale en español
+
+Una barra donde le dices qué hacer con tus palabras y ella lo traduce a comandos y los corre (mostrándote cada uno). Es local y determinista — funciona sin internet, sin cuenta ni clave:
+
+- *"cada mañana mándame el precio de bitcoin"* → `cada 24h curl … > ~/bandeja/…`
+- *"manda hola a discord"* → `echo "hola" > /apps/discord`
+- *"las facturas van al webhook"* → `ruta facturas webhook`
+- *"cuánta batería tengo"*, *"dónde estoy"*, *"vibra"* → `nexus …` (las APIs reales de tu teléfono)
+
+Si quieres, puedes conectarle un modelo de IA propio (`config.copiloto.url`); si falla o no hay, siguen valiendo las reglas locales. También está en la terminal como `haz …`.
+
+## nexus-ctl: el control del teléfono
+
+Una sola interfaz que funciona igual en la web y en la app nativa:
+
+```sh
+nexus bateria          # 🔋 84 % (cargando)      — Web Battery API
+nexus ubicacion        # 📍 lat, lon             — geolocalización (con permiso)
+nexus red              # 📶 4G · ~1.6 Mbps
+nexus vibrar           # 📳                       — con tu permiso
+nexus copiar "texto"   # 📋 al portapapeles ;  nexus pegar
+nexus compartir "..."  # 📤 menú de compartir ;  nexus despierta on|off
+```
+
+En el navegador usa las APIs del teléfono (con tu permiso), sobre **tu** dispositivo. Lo que un navegador no puede (`nexus tocar`, `escribir`, `abrir`, `notifs`) se anuncia y lo cumple **Mosca OS nativo** — misma orden, otro backend. Todo el plan está en **[ARQUITECTURA-NATIVA.md](ARQUITECTURA-NATIVA.md)**: PTY en C++/JNI + PRoot (Linux real), AccessibilityService, NotificationListener y el puente Shizuku/ADB, acoplados a lo que ya existe.
+
 ## La terminal de Mosca OS (mosh)
 
 Una shell con los comandos de siempre (`ls cd cat echo grep head tail sort uniq wc tee cp mv rm mkdir`, tuberías `|`, `>`, `>>`, `&&`, `;`, `$VARIABLES`, comodines, historial, TAB) donde todo está conectado a la mosca:
@@ -75,7 +101,7 @@ Trabaja mientras la página esté abierta. Lo que aprende se guarda en el dispos
 
 ## Desarrollo
 
-Sin dependencias ni compilación: HTML, CSS y JavaScript. El cerebro (`js/cerebro.js`), la arena (`js/mundo.js`), la pantalla de trabajo (`js/pantalla.js`), Mosca OS (`js/sistema.js`: archivos y shell) y los mensajes (`js/conexiones.js`) también corren en Node.
+Sin dependencias ni compilación: HTML, CSS y JavaScript. El cerebro (`js/cerebro.js`), la arena (`js/mundo.js`), la pantalla de trabajo (`js/pantalla.js`), Mosca OS (`js/sistema.js`: archivos y shell), el copiloto (`js/copiloto.js`) y los mensajes (`js/conexiones.js`) también corren en Node. El plan de la app nativa de Android está en [ARQUITECTURA-NATIVA.md](ARQUITECTURA-NATIVA.md).
 
 ```sh
 node --test "tests/*.test.js"           # la mosca (comer, huir, aprender, la pantalla de trabajo) y la shell

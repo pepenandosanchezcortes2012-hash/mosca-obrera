@@ -12,6 +12,7 @@
   const Conexiones = window.MoscaConexiones;
   const Sistema = window.MoscaSistema;
   const Terminal = window.MoscaTerminal;
+  const Copiloto = window.MoscaCopiloto;
   const { VistaArena, VistaCerebro, VistaPantalla, EMOJI_ACCION, TEXTO_ACCION, colorOlor } = window.MoscaVista;
   const { normalizarOlor, OLORES, COMPARTIMENTOS } = Cerebro;
   const CLAVE = 'mosca-obrera:v1';
@@ -632,7 +633,8 @@
     { id: 'conectada', titulo: 'Conectada', pista: 'Enciende una entrada (ntfy, cripto, clima o GitHub) y que le llegue un trabajo desde afuera.', ok: () => registro.some((c) => ['prueba', 'consola', 'enlace'].indexOf(c.fuente) < 0) },
     { id: 'obrera', titulo: 'Obrera entrenada', pista: 'Califica sus trabajos (👍, o 👎 y adónde iba) hasta que acierte cinco seguidos.', ok: () => marcador.racha >= 5 },
     { id: 'terminal', titulo: 'Hola, terminal', pista: 'En la terminal de Mosca OS escribe neofetch y después ls ~/bandeja.' },
-    { id: 'automatiza', titulo: 'Que trabaje sola', pista: 'Crea una tarea que se repita: cada 10m echo "#recordatorio toma agua" > ~/bandeja/agua.txt', ok: () => !!(shell && shell.tareas.length) }
+    { id: 'automatiza', titulo: 'Que trabaje sola', pista: 'Crea una tarea que se repita: cada 10m echo "#recordatorio toma agua" > ~/bandeja/agua.txt', ok: () => !!(shell && shell.tareas.length) },
+    { id: 'copiloto', titulo: 'Háblale normal', pista: 'Usa el copiloto: escribe algo como «manda hola a discord» o «cuánta batería tengo».' }
   ];
 
   function completar(id) {
@@ -1031,12 +1033,125 @@
       if (!document.body.classList.contains('modo-os')) { return false; }
       salirModoApp();
       return true;
-    }
+    },
+    // El copiloto: lenguaje natural → comandos. Local; si pones un endpoint propio en config, lo intenta y cae a lo local.
+    copiloto: (texto) => interpretarCopiloto(texto),
+    // El puente al teléfono: en el navegador, sus propias APIs (con tu permiso). El resto lo cumple Mosca OS nativo.
+    dispositivo: puenteTelefono()
   };
+  function puenteTelefono() {
+    let wakeLock = null;
+    const noHay = (api) => { throw new Error('tu navegador no tiene ' + api + ' (prueba Chrome en el celular, o Mosca OS nativo)'); };
+    return {
+      async bateria() {
+        if (!navigator.getBattery) { return '🔋 este navegador no dice la batería (sí lo hace Chrome en Android)'; }
+        const b = await navigator.getBattery();
+        return '🔋 ' + Math.round(b.level * 100) + ' %' + (b.charging ? ' (cargando)' : '') +
+          (b.dischargingTime && b.dischargingTime !== Infinity ? ' · ~' + Math.round(b.dischargingTime / 60) + ' min' : '');
+      },
+      ubicacion() {
+        if (!navigator.geolocation) { noHay('GPS'); }
+        return new Promise((res) => {
+          navigator.geolocation.getCurrentPosition(
+            (p) => res('📍 ' + p.coords.latitude.toFixed(4) + ', ' + p.coords.longitude.toFixed(4) +
+              '  ·  https://maps.google.com/?q=' + p.coords.latitude + ',' + p.coords.longitude),
+            (e) => res('📍 no pude: ' + e.message), { timeout: 10000, maximumAge: 60000 });
+        });
+      },
+      red() {
+        const c = navigator.connection || {};
+        const tipo = c.effectiveType ? c.effectiveType.toUpperCase() : (navigator.onLine ? 'conectado' : '');
+        return '📶 ' + (navigator.onLine ? (tipo || 'en línea') : 'sin conexión') +
+          (c.downlink ? ' · ~' + c.downlink + ' Mbps' : '') + (c.saveData ? ' · ahorro de datos' : '');
+      },
+      async vibrar(patron) {
+        if (!navigator.vibrate) { return '📳 este navegador no vibra'; }
+        const p = /^[\d, ]+$/.test(patron || '') ? patron.split(/[, ]+/).filter(Boolean).map(Number) : [120, 60, 120];
+        navigator.vibrate(p);
+        return '📳 bzz';
+      },
+      async copiar(texto) {
+        if (!navigator.clipboard) { noHay('portapapeles'); }
+        await navigator.clipboard.writeText(texto);
+        return '📋 copiado: ' + texto.slice(0, 60);
+      },
+      async pegar() {
+        if (!navigator.clipboard || !navigator.clipboard.readText) { noHay('lectura del portapapeles'); }
+        const t = await navigator.clipboard.readText();
+        return '📋 ' + (t || '(vacío)');
+      },
+      async compartir(texto) {
+        if (!navigator.share) { noHay('menú de compartir'); }
+        await navigator.share({ text: texto });
+        return '📤 compartido';
+      },
+      async despierta(on) {
+        if (!('wakeLock' in navigator)) { return '☀️ este navegador no mantiene la pantalla encendida'; }
+        if (on) { wakeLock = await navigator.wakeLock.request('screen'); return '☀️ pantalla encendida mientras uses Mosca OS'; }
+        if (wakeLock) { wakeLock.release(); wakeLock = null; }
+        return '🌙 pantalla liberada';
+      }
+    };
+  }
+
+  async function interpretarCopiloto(texto) {
+    const ctx = { apps: Pantalla.APPS.map((a) => a.id), temaSalida: config.salidaNtfy.tema, olores: oloresAMostrar() };
+    // Si configuraste un endpoint de IA propio, lo intentamos; si falla o no hay, vale lo local.
+    if (config.copiloto && config.copiloto.url) {
+      try { const r = await copilotoIA(texto, ctx); if (r) { return r; } } catch (e) { /* cae a lo local */ }
+    }
+    return Copiloto.interpretar(texto, ctx);
+  }
+
+  async function copilotoIA(texto, ctx) {
+    const sis = 'Eres el copiloto de Mosca OS. Traduce la orden del usuario a comandos de la shell mosh. ' +
+      'Apps: ' + ctx.apps.join(', ') + '. Comandos útiles: echo > /apps/APP, ruta OLOR APP, trabajo "#tag texto", ' +
+      'cada 10m CMD, nexus bateria|ubicacion|vibrar|copiar|pegar|compartir|despierta, cat/ls/curl. ' +
+      'Responde SOLO JSON: {"di":"...","comandos":["..."]}';
+    const r = await fetch(config.copiloto.url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sistema: sis, texto, apps: ctx.apps }) });
+    if (!r.ok) { throw new Error('IA ' + r.status); }
+    const d = await r.json();
+    const plan = d && (d.comandos ? d : (d.plan || null));
+    if (!plan || !Array.isArray(plan.comandos)) { return null; }
+    return { ok: true, di: plan.di || 'listo', comandos: plan.comandos.slice(0, 8), confirmar: false };
+  }
+
   shell = new Sistema.Shell(sfs, entorno);
   if (Array.isArray(guardado.historia)) { shell.historia = guardado.historia.slice(-100); }
   Sistema.montarMosca(sfs, shell, entorno);
   terminal = new Terminal($('#terminal'), shell, pantalla);
+
+  // La barra del copiloto: le dices en español y lo ejecuta en la terminal, mostrando cada comando.
+  let copilotoCorriendo = false;
+  async function correrCopiloto(texto) {
+    texto = String(texto || '').trim();
+    if (!texto || copilotoCorriendo) { return; }
+    copilotoCorriendo = true;
+    terminal.lineaPrompt('haz ' + texto, 'tu');
+    try {
+      const r = await interpretarCopiloto(texto);
+      if (!r || r.ok === false) {
+        terminal.escribir('🤖 ' + ((r && r.pregunta) || 'no te entendí'), 'nota');
+      } else {
+        if (r.di) { terminal.escribir('🤖 ' + r.di, 'nota'); }
+        for (const cmd of (r.comandos || [])) { await terminal.correr(cmd); }
+        completar('copiloto');
+      }
+    } catch (e) {
+      terminal.escribir('🤖 error: ' + e.message, 'error');
+    }
+    $('#terminal').scrollIntoView({ block: 'center' });
+    copilotoCorriendo = false;
+  }
+  $('#form-copiloto').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const inp = $('#copiloto-texto');
+    const v = inp.value;
+    inp.value = '';
+    correrCopiloto(v);
+  });
+  for (const b of $$('[data-copiloto]')) { b.addEventListener('click', () => { $('#copiloto-texto').value = b.dataset.copiloto; correrCopiloto(b.dataset.copiloto); }); }
   terminal.alCorrer = (l) => {
     if (/^\s*neofetch/.test(l)) { hechas.add('neofetch'); }
     if (/^\s*ls\s+.*bandeja/.test(l) && hechas.has('neofetch')) { completar('terminal'); }

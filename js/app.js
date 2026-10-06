@@ -1123,11 +1123,15 @@
   terminal = new Terminal($('#terminal'), shell, pantalla);
 
   // La barra del copiloto: le dices en español y lo ejecuta en la terminal, mostrando cada comando.
-  let copilotoCorriendo = false;
-  async function correrCopiloto(texto) {
+  // Si disparas varias órdenes seguidas, hacen cola (no se pisan ni se pierden).
+  let colaCopiloto = Promise.resolve();
+  function correrCopiloto(texto) {
     texto = String(texto || '').trim();
-    if (!texto || copilotoCorriendo) { return; }
-    copilotoCorriendo = true;
+    if (!texto) { return colaCopiloto; }
+    colaCopiloto = colaCopiloto.then(() => _correrCopiloto(texto));
+    return colaCopiloto;
+  }
+  async function _correrCopiloto(texto) {
     terminal.lineaPrompt('haz ' + texto, 'tu');
     try {
       const r = await interpretarCopiloto(texto);
@@ -1142,7 +1146,6 @@
       terminal.escribir('🤖 error: ' + e.message, 'error');
     }
     $('#terminal').scrollIntoView({ block: 'center' });
-    copilotoCorriendo = false;
   }
   $('#form-copiloto').addEventListener('submit', (e) => {
     e.preventDefault();

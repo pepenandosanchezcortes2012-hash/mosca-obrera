@@ -1,7 +1,7 @@
 // Mosca OS: service worker. Guarda todo al instalarse para que funcione sin internet (como una app local).
 // Con red, siempre trae la versión nueva; sin red, usa lo guardado.
 // También permite mostrar notificaciones en Android, donde `new Notification()` no funciona.
-const CACHE = 'mosca-os-v4';
+const CACHE = 'mosca-os-v5';
 const BASE = ['./', 'index.html', 'estilo.css', 'icono.svg', 'icono-192.png', 'icono-512.png', 'manifest.webmanifest',
   'js/cerebro.js', 'js/mundo.js', 'js/pantalla.js', 'js/sistema.js', 'js/copiloto.js', 'js/vista.js', 'js/terminal.js', 'js/conexiones.js', 'js/app.js'];
 

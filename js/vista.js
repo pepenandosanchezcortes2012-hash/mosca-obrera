@@ -13,6 +13,14 @@
 
   function colorOlor(olor) { return infoOlor(olor).color; }
 
+  /** Gradiente radial seguro: si algún número no es finito (p. ej. durante un redimensionado), devuelve el color plano. */
+  function radial(ctx, x0, y0, r0, x1, y1, r1, fallback) {
+    if ([x0, y0, r0, x1, y1, r1].every(Number.isFinite) && r1 >= 0) {
+      try { return ctx.createRadialGradient(x0, y0, r0, x1, y1, r1); } catch (e) { /* cae al color plano */ }
+    }
+    return fallback || 'rgba(0,0,0,0)';
+  }
+
   function conAlfa(color, a) {
     if (color[0] === '#') {
       const n = parseInt(color.slice(1), 16);
@@ -46,6 +54,8 @@
     /** Ajusta el lienzo a su caja y devuelve el tamaño del mundo que le corresponde (más zoom en pantallas chicas). */
     ajustar() {
       const r = this.cv.getBoundingClientRect();
+      // Si está oculto (p. ej. al pasar a modo app), no hay caja: deja el mundo como está (evita tamaños NaN).
+      if (!r.width || !r.height) { return { W: this.mundo.W, H: this.mundo.H }; }
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       this.cv.width = Math.round(r.width * dpr);
       this.cv.height = Math.round(r.height * dpr);
@@ -85,7 +95,7 @@
     }
 
     _fondo(ctx, mu, t) {
-      const g = ctx.createRadialGradient(mu.W / 2, mu.H / 2, 40, mu.W / 2, mu.H / 2, Math.max(mu.W, mu.H) * 0.7);
+      const g = radial(ctx, mu.W / 2, mu.H / 2, 40, mu.W / 2, mu.H / 2, Math.max(mu.W, mu.H) * 0.7, '#0f1720');
       g.addColorStop(0, '#16202b');
       g.addColorStop(1, '#0b1118');
       ctx.fillStyle = g;
@@ -125,7 +135,7 @@
         if (o.olor) {
           const p = mu.pluma(o);
           const r = p.alcance * 2.6;
-          const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+          const g = radial(ctx, p.x, p.y, 0, p.x, p.y, r);
           const col = colorOlor(o.olor);
           g.addColorStop(0, conAlfa(col, 0.32 * Math.min(1, p.fuerza)));
           g.addColorStop(0.35, conAlfa(col, 0.12 * Math.min(1, p.fuerza)));
@@ -138,7 +148,7 @@
           const fade = Math.min(1, o.vida / 4, (o.edad + 0.3) / 1.5);
           const r = o.tipo === 'calor' ? o.sigma * 2 : 230;
           const col = o.tipo === 'calor' ? '#ff5a36' : '#fff2b0';
-          const g = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, r);
+          const g = radial(ctx, o.x, o.y, 0, o.x, o.y, r);
           g.addColorStop(0, conAlfa(col, 0.35 * fade));
           g.addColorStop(1, conAlfa(col, 0));
           ctx.fillStyle = g;
@@ -469,6 +479,7 @@
 
     ajustar() {
       const r = this.cv.getBoundingClientRect();
+      if (!r.width || !r.height) { return; }
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       this.cv.width = Math.round(r.width * dpr);
       this.cv.height = Math.round(r.height * dpr);
@@ -666,7 +677,7 @@
   function neurona(ctx, x, y, r, a, color) {
     a = Math.max(0, Math.min(1, a || 0));
     if (a > 0.08) {
-      const g = ctx.createRadialGradient(x, y, 0, x, y, r * 2.6);
+      const g = radial(ctx, x, y, 0, x, y, r * 2.6);
       g.addColorStop(0, conAlfa(color, 0.55 * a));
       g.addColorStop(1, conAlfa(color, 0));
       ctx.fillStyle = g;

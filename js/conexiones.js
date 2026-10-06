@@ -4,8 +4,8 @@
  * Entradas (lo que la mosca «huele»): un canal de ntfy que cualquier app puede usar (curl, n8n, Zapier, IFTTT,
  * Atajos de iPhone…), el mercado cripto (CoinGecko), el clima de tu ciudad (Open-Meteo) y la actividad de un repo
  * de GitHub. Cada mensaje se vuelve un estímulo (fruta, mano, premio…) o una carta con un olor.
- * Salidas (a quién le avisa cuando recoge una carta): ntfy (notificación en el celular), Discord, cualquier webhook
- * y las notificaciones del navegador.
+ * Salidas (las apps de su pantalla de trabajo): ntfy (notificación en el celular), Discord, cualquier webhook y las
+ * notificaciones del navegador. Cuando la mosca suelta un trabajo en una app, se manda por la salida de esa app.
  *
  * Todo corre en el navegador: no hay servidor. Las direcciones y canales quedan guardados solo en este dispositivo.
  */
@@ -99,7 +99,6 @@
       discord: { activo: false, url: '' },
       webhook: { activo: false, url: '' },
       navegador: { activo: false },
-      reglas: { aceptada: true, descartada: false, huida: false, aprende: false },
       cripto: { activo: false, monedas: 'bitcoin', umbral: 1 },
       clima: { activo: false, ciudad: '', lat: null, lon: null },
       github: { activo: false, repo: '' }
@@ -130,7 +129,6 @@
       this.cripto = {};
       this.lluvia = null;
       this.ghUltimo = null;
-      this._ultimoEnvio = {};
     }
 
     // ---------------------------------------------------------------------------------------------- entrada
@@ -157,34 +155,23 @@
 
     // ---------------------------------------------------------------------------------------------- salidas
     /**
-     * Avisa a todas las salidas encendidas. ev: { regla, titulo, texto, olor, datos }.
-     * Devuelve [{ salida, ok, detalle }].
+     * Manda algo por una salida: 'salidaNtfy' | 'discord' | 'webhook' | 'navegador'.
+     * ev: { titulo, texto, olor, evento, datos }. Devuelve { ok, detalle } (nunca lanza: el error va en detalle).
      */
-    async avisar(ev, soloPrueba) {
-      if (!soloPrueba && ev.regla && !this.cfg.reglas[ev.regla]) { return []; }
-      if (!soloPrueba && ev.regla === 'huida') {
-        const ahora = Date.now();
-        if (ahora - (this._ultimoEnvio.huida || 0) < 60000) { return []; }
-        this._ultimoEnvio.huida = ahora;
+    async enviarA(salida, ev) {
+      if (!this.cfg[salida] || !this.cfg[salida].activo) {
+        this.alEstado(salida, 'apagado', 'info');
+        return { ok: false, detalle: 'no está conectado' };
       }
-      const tareas = [];
-      const c = this.cfg;
-      if (c.salidaNtfy.activo && (!soloPrueba || soloPrueba === 'salidaNtfy')) { tareas.push(['salidaNtfy', this._ntfy(ev)]); }
-      if (c.discord.activo && (!soloPrueba || soloPrueba === 'discord')) { tareas.push(['discord', this._discord(ev)]); }
-      if (c.webhook.activo && (!soloPrueba || soloPrueba === 'webhook')) { tareas.push(['webhook', this._webhook(ev)]); }
-      if (c.navegador.activo && (!soloPrueba || soloPrueba === 'navegador')) { tareas.push(['navegador', this._navegador(ev)]); }
-      const res = [];
-      for (const [salida, p] of tareas) {
-        try {
-          const detalle = await p;
-          res.push({ salida, ok: true, detalle });
-          this.alEstado(salida, detalle || 'enviado ' + hora(), 'ok');
-        } catch (e) {
-          res.push({ salida, ok: false, detalle: e.message });
-          this.alEstado(salida, 'falló: ' + e.message, 'error');
-        }
+      const fn = { salidaNtfy: this._ntfy, discord: this._discord, webhook: this._webhook, navegador: this._navegador }[salida];
+      try {
+        const detalle = await fn.call(this, ev);
+        this.alEstado(salida, detalle, 'ok');
+        return { ok: true, detalle };
+      } catch (e) {
+        this.alEstado(salida, 'falló: ' + e.message, 'error');
+        return { ok: false, detalle: 'falló: ' + e.message };
       }
-      return res;
     }
 
     async _ntfy(ev) {
@@ -218,7 +205,7 @@
       const url = this.cfg.webhook.url;
       if (!esUrl(url)) { throw new Error('falta una dirección http(s)'); }
       const cuerpo = JSON.stringify(Object.assign({ fuente: MARCA, mosca: this.nombre(), titulo: ev.titulo, texto: ev.texto,
-        olor: ev.olor || null, evento: ev.regla || 'prueba', hora: new Date().toISOString() }, ev.datos || {}));
+        olor: ev.olor || null, evento: ev.evento || 'prueba', hora: new Date().toISOString() }, ev.datos || {}));
       try {
         const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: cuerpo });
         if (!r.ok) { throw new Error('el webhook respondió ' + r.status); }

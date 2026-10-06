@@ -70,9 +70,9 @@
       ctx.setTransform(s, 0, 0, s, 0, 0);
       this._fondo(ctx, mu, tReal);
       this._plumas(ctx, mu);
-      this._rastro(ctx, mu.mosca);
+      if (mu.activo) { this._rastro(ctx, mu.mosca); }
       this._objetos(ctx, mu, tReal);
-      this._mosca(ctx, mu, tReal);
+      if (mu.activo) { this._mosca(ctx, mu, tReal); }
       this._efectos(ctx, dt);
       const hora = mu.hora();
       if (hora != null) {
@@ -207,36 +207,8 @@
     }
 
     _mosca(ctx, mu, t) {
-      const m = mu.mosca;
       const accion = mu.cerebro.accion();
-      const L = 1.3;
-      ctx.save();
-      // Sombra (se separa cuando salta).
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-      ctx.beginPath();
-      ctx.ellipse(m.x + 4 + m.alto * 18, m.y + 6 + m.alto * 22, 16 * L, 9 * L, m.ang, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.translate(m.x, m.y - m.alto * 10);
-      ctx.rotate(m.ang);
-      ctx.scale(L * (1 + m.alto * 0.25), L * (1 + m.alto * 0.25));
-      dibujarMosca(ctx, { fase: m.fase, accion, volando: m.salto > 0, t });
-      ctx.restore();
-      // Lo que está haciendo, encima.
-      ctx.save();
-      ctx.font = '600 13px system-ui, sans-serif';
-      const txt = EMOJI_ACCION[accion] + ' ' + TEXTO_ACCION[accion];
-      const w = ctx.measureText(txt).width + 14;
-      // Que no se salga de la arena cuando la mosca está pegada a una pared.
-      const x = Math.min(mu.W - w / 2 - 4, Math.max(w / 2 + 4, m.x));
-      const y = m.y - 40 - m.alto * 10 < 16 ? m.y + 40 : m.y - 40 - m.alto * 10;
-      ctx.fillStyle = 'rgba(10, 14, 20, 0.72)';
-      redondeado(ctx, x - w / 2, y - 11, w, 22, 11);
-      ctx.fill();
-      ctx.fillStyle = accion === 'huir' ? '#ff8a8a' : '#e7edf3';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(txt, x, y + 1);
-      ctx.restore();
+      moscaConEtiqueta(ctx, mu.mosca, accion, t, EMOJI_ACCION[accion] + ' ' + TEXTO_ACCION[accion], mu.W);
     }
 
     _efectos(ctx, dt) {
@@ -259,6 +231,35 @@
       }
       ctx.restore();
     }
+  }
+
+  /** La mosca (con su sombra, que se separa cuando salta) y un cartelito encima con lo que está haciendo. */
+  function moscaConEtiqueta(ctx, m, accion, t, txt, W) {
+    const L = 1.3;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.beginPath();
+    ctx.ellipse(m.x + 4 + m.alto * 18, m.y + 6 + m.alto * 22, 16 * L, 9 * L, m.ang, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.translate(m.x, m.y - m.alto * 10);
+    ctx.rotate(m.ang);
+    ctx.scale(L * (1 + m.alto * 0.25), L * (1 + m.alto * 0.25));
+    dibujarMosca(ctx, { fase: m.fase, accion, volando: m.salto > 0, t });
+    ctx.restore();
+    ctx.save();
+    ctx.font = '600 13px system-ui, sans-serif';
+    const w = ctx.measureText(txt).width + 14;
+    // Que no se salga cuando la mosca está pegada a una pared.
+    const x = Math.min(W - w / 2 - 4, Math.max(w / 2 + 4, m.x));
+    const y = m.y - 40 - m.alto * 10 < 16 ? m.y + 40 : m.y - 40 - m.alto * 10;
+    ctx.fillStyle = 'rgba(10, 14, 20, 0.78)';
+    redondeado(ctx, x - w / 2, y - 11, w, 22, 11);
+    ctx.fill();
+    ctx.fillStyle = accion === 'huir' ? '#ff8a8a' : '#e7edf3';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(txt, x, y + 1);
+    ctx.restore();
   }
 
   function redondeado(ctx, x, y, w, h, r) {
@@ -689,5 +690,199 @@
     ctx.stroke();
   }
 
-  raiz.MoscaVista = { VistaArena, VistaCerebro, REGIONES, EMOJI_ACCION, TEXTO_ACCION, dibujarMosca, colorOlor };
+  // ================================================================================================ pantalla de trabajo
+  /**
+   * La pantalla de trabajo: los trabajos y las apps son botones de verdad (los tocas tú y los toca ella); la mosca se
+   * dibuja en una capa transparente encima, que deja pasar tus toques.
+   */
+  class VistaPantalla {
+    constructor(zona, canvas, pantalla) {
+      this.zona = zona;
+      this.cv = canvas;
+      this.ctx = canvas.getContext('2d');
+      this.p = pantalla;
+      this.els = new Map();
+      this.ondas = [];
+      this.cuentas = {};
+      this.escala = 1;
+      this.tInteres = 0;
+      const APPS = raiz.MoscaPantalla.APPS;
+      for (const a of pantalla.apps) {
+        const info = APPS.find((x) => x.id === a.app);
+        const b = zona.ownerDocument.createElement('button');
+        b.type = 'button';
+        b.className = 'os-app';
+        b.dataset.widget = a.id;
+        b.dataset.app = a.app;
+        b.innerHTML = '<span class="os-icono">' + info.emoji + '</span><span class="os-nombre">' + info.nombre +
+          '</span><small class="os-off">sin conectar</small><b class="os-badge" hidden>0</b>';
+        b.setAttribute('aria-label', 'App ' + info.nombre);
+        zona.insertBefore(b, canvas);
+        this.els.set(a.id, b);
+      }
+      pantalla.on((ev) => this._alEvento(ev));
+    }
+
+    _alEvento(ev) {
+      if (ev.tipo === 'toque-mosca') {
+        this.ondas.push({ x: ev.x, y: ev.y, t: 0, color: '#ffd27a' });
+        const el = this.els.get(ev.objetivo);
+        if (el) {
+          el.classList.add('tocado');
+          setTimeout(() => el.classList.remove('tocado'), 260);
+        }
+      } else if (ev.tipo === 'trabajo') {
+        this.ondas.push({ x: ev.x, y: ev.y, t: 0, color: ev.resultado === 'ignorado' ? '#8b98a8' : '#4fe0b0' });
+        this.cuentas[ev.app] = (this.cuentas[ev.app] || 0) + 1;
+        const b = this.els.get('app-' + ev.app);
+        if (b) {
+          const badge = b.querySelector('.os-badge');
+          badge.hidden = false;
+          badge.textContent = String(this.cuentas[ev.app]);
+        }
+      }
+    }
+
+    /** Apps sin salida configurada: se ven apagadas (lo que llegue ahí se queda en el archivo). */
+    marcarApagadas(apagadas) {
+      for (const a of this.p.apps) { this.els.get(a.id).classList.toggle('apagada', apagadas.indexOf(a.app) >= 0); }
+    }
+
+    ajustar() {
+      const r = this.zona.getBoundingClientRect();
+      if (!r.width || !r.height) { return null; }
+      const win = this.zona.ownerDocument.defaultView || window;
+      const dpr = Math.min(win.devicePixelRatio || 1, 2);
+      this.cv.width = Math.round(r.width * dpr);
+      this.cv.height = Math.round(r.height * dpr);
+      const W = Math.max(480, Math.min(1000, r.width * 1.1));
+      const H = W * r.height / r.width;
+      this.escala = this.cv.width / W;
+      return { W, H };
+    }
+
+    /** De coordenadas del mundo a la pantalla de verdad (para que el toque de la mosca caiga en el botón). */
+    aCliente(x, y) {
+      const r = this.zona.getBoundingClientRect();
+      return { x: r.left + x / this.p.W * r.width, y: r.top + y / this.p.H * r.height };
+    }
+
+    _crearTrabajo(o) {
+      const d = this.zona.ownerDocument;
+      const t = o.trabajo;
+      const b = d.createElement('button');
+      b.type = 'button';
+      b.className = 'os-trabajo';
+      b.dataset.widget = o.id;
+      b.style.setProperty('--c', colorOlor(t.olor));
+      const olor = d.createElement('span');
+      olor.className = 'os-olor';
+      olor.textContent = '#' + t.olor;
+      const fuente = d.createElement('span');
+      fuente.className = 'os-fuente';
+      fuente.textContent = t.fuente;
+      const texto = d.createElement('span');
+      texto.className = 'os-texto';
+      texto.textContent = t.texto;
+      const vida = d.createElement('i');
+      vida.className = 'os-vida';
+      b.append(olor, fuente, texto, vida);
+      b.setAttribute('aria-label', 'Trabajo #' + t.olor + ': ' + t.texto);
+      this.zona.insertBefore(b, this.cv);
+      this.els.set(o.id, b);
+      return b;
+    }
+
+    /** Texto del cartelito de la mosca en la pantalla. */
+    _etiqueta(accion) {
+      const p = this.p;
+      if (p.carga) {
+        const destino = raiz.MoscaPantalla.APPS.find((a) => a.id === p.destinoPara(p.carga.trabajo.olor));
+        return accion === 'comer' ? '👆 tocando ' + destino.emoji : '✉️ #' + p.carga.trabajo.olor + ' → ' + destino.emoji;
+      }
+      if (accion === 'comer') { return '👆 agarrando'; }
+      if (accion === 'acercarse') { return '➡️ va por un trabajo'; }
+      if (accion === 'explorar') { return p.objetos.some((o) => o.tipo === 'carta') ? '🔎 mirando los trabajos' : '🔎 esperando trabajo'; }
+      return EMOJI_ACCION[accion] + ' ' + TEXTO_ACCION[accion];
+    }
+
+    /** Pone cada botón donde está en el mundo (antes de un toque, para que el clic caiga en el botón correcto). */
+    sincronizar(t) {
+      const p = this.p;
+      const W = p.W;
+      const H = p.H;
+      const vivos = new Set();
+      for (const o of p.objetos) {
+        vivos.add(o.id);
+        const el = this.els.get(o.id) || this._crearTrabajo(o);
+        const cargado = o === p.carga;
+        const w = cargado ? o.w * 0.45 : o.w;
+        const h = cargado ? o.h * 0.45 : o.h;
+        el.style.left = ((o.x - w / 2) / W * 100) + '%';
+        el.style.top = ((o.y - h / 2) / H * 100) + '%';
+        el.style.width = (w / W * 100) + '%';
+        el.style.height = (h / H * 100) + '%';
+        if (o.tipo === 'carta') {
+          el.classList.toggle('cargado', cargado);
+          el.classList.toggle('elegido', p.elegido === o);
+          el.style.transform = cargado ? 'rotate(' + (Math.sin(t * 4) * 6).toFixed(1) + 'deg)' : '';
+          el.style.setProperty('--vida', cargado ? '1' : Math.max(0, o.vida / o.vida0).toFixed(3));
+        }
+      }
+      for (const [id, el] of this.els) {
+        if (!vivos.has(id)) { el.remove(); this.els.delete(id); }
+      }
+    }
+
+    dibujar(dt, t) {
+      const p = this.p;
+      const W = p.W;
+      this.sincronizar(t);
+      // El brillo de cada botón: cuánto le interesa a la mosca ahora (lo que ve su cuerpo fungiforme).
+      this.tInteres += dt;
+      if (this.tInteres > 0.2) {
+        this.tInteres = 0;
+        for (const o of p.objetos) {
+          const el = this.els.get(o.id);
+          let v = 0;
+          if (p.activo && ((o.tipo === 'app' && p.carga) || (o.tipo === 'carta' && !p.carga && o.olor))) {
+            v = p.cerebro.valOlor.get(o.olor) || 0;
+          }
+          el.style.setProperty('--interes', Math.min(1, Math.max(0, v * 2.5)).toFixed(2));
+        }
+      }
+      const ctx = this.ctx;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, this.cv.width, this.cv.height);
+      ctx.setTransform(this.escala, 0, 0, this.escala, 0, 0);
+      if (p.activo) {
+        const r = p.mosca.rastro;
+        ctx.lineCap = 'round';
+        ctx.lineWidth = 2;
+        for (let i = 2; i < r.length; i += 2) {
+          ctx.strokeStyle = 'rgba(255, 181, 71,' + (0.18 * i / r.length) + ')';
+          ctx.beginPath();
+          ctx.moveTo(r[i - 2], r[i - 1]);
+          ctx.lineTo(r[i], r[i + 1]);
+          ctx.stroke();
+        }
+        const accion = p.cerebro.accion();
+        moscaConEtiqueta(ctx, p.mosca, accion, t, this._etiqueta(accion), W);
+      }
+      for (let i = this.ondas.length - 1; i >= 0; i -= 1) {
+        const o = this.ondas[i];
+        o.t += dt;
+        if (o.t > 0.7) { this.ondas.splice(i, 1); continue; }
+        ctx.globalAlpha = 1 - o.t / 0.7;
+        ctx.strokeStyle = o.color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(o.x, o.y, 8 + o.t * 70, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+
+  raiz.MoscaVista = { VistaArena, VistaCerebro, VistaPantalla, REGIONES, EMOJI_ACCION, TEXTO_ACCION, dibujarMosca, colorOlor };
 })(window);

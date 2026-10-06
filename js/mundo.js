@@ -2,8 +2,9 @@
  * Mosca Obrera: el mundo (la arena donde vive la mosca).
  *
  * Arma lo que sienten sus antenas, ojos, patas y boca a partir de las cosas que hay en la arena (fruta, olores, luz,
- * calor, una mano que se acerca, cartas que mandan otras apps), se lo pasa al cerebro y mueve el cuerpo según la
- * neurona descendente que ganó. No dibuja nada: eso lo hace vista.js. Funciona en Node para las pruebas.
+ * calor, una mano que se acerca), se lo pasa al cerebro y mueve el cuerpo según la neurona descendente que ganó.
+ * La pantalla de trabajo (pantalla.js) es otro mundo hecho con la misma física. No dibuja nada: eso lo hace vista.js.
+ * Funciona en Node para las pruebas.
  */
 (function (raiz, fabrica) {
   if (typeof module === 'object' && module.exports) { module.exports = fabrica(require('./cerebro.js')); } else { raiz.MoscaMundo = fabrica(raiz.MoscaCerebro); }
@@ -22,11 +23,9 @@
     humo: { olor: 'humo', alcance: 90, vida: 45, emoji: '🌫️', nombre: 'humo' },
     luz: { brillo: 1, vida: 60, emoji: '💡', nombre: 'luz' },
     calor: { calor: 14, sigma: 110, vida: 45, emoji: '🔥', nombre: 'calor' },
-    amenaza: { vida: 1.5, emoji: '🖐️', nombre: 'mano' },
-    carta: { alcance: 150, vida: 45, fuerzaOlor: 1.4, emoji: '✉️', nombre: 'carta' }
+    amenaza: { vida: 1.5, emoji: '🖐️', nombre: 'mano' }
   };
   const MAX_OBJETOS = 24;
-  const MAX_CARTAS = 3;
   const R_MUESTRA = 45;
   const R_BOCA = 24;
 
@@ -41,15 +40,15 @@
       this.mosca = { x: this.W / 2, y: this.H / 2, ang: -Math.PI / 2, vel: 0, vAng: 0, salto: 0, alto: 0, fase: 0,
         huyendo: false, rastro: [] };
       this.objetos = [];
-      this.cola = [];
       this.viento = { ang: 0, fuerza: 0, hasta: 0 };
       this.tempAmbiente = 23;
       this.t = 0;
       this.modoReloj = op.modoReloj || 'acelerado';
       this.diaSeg = op.diaSeg || 480;
       this.horaInicio = op.horaInicio == null ? 0.35 : op.horaInicio;
-      this.stats = { comidas: 0, huidas: 0, cartas: 0, aceptadas: 0, descartadas: 0, toques: 0, premios: 0, castigos: 0,
-        eligioMenta: 0 };
+      this.stats = { comidas: 0, huidas: 0, toques: 0, premios: 0, castigos: 0, eligioMenta: 0 };
+      /** La mosca está en un solo lugar: solo el mundo activo avanza y repite lo que hace su cerebro. */
+      this.activo = true;
       this.oyentes = [];
       this._id = 1;
       this._gotaDulce = 0;
@@ -57,10 +56,11 @@
       this._comiendo = false;
       this._tRastro = 0;
       this._sen = { olores: new Map(), luz: new Float32Array(N_EPG), temp: new Float32Array(N_EPG + 1),
-        amenaza: 0, amenazaAng: 0, dulce: 0, hora: null, actividad: 0 };
+        amenaza: 0, amenazaAng: 0, dulce: 0, contacto: 0, hora: null, actividad: 0 };
       this._px = new Float32Array(N_EPG + 1);
       this._py = new Float32Array(N_EPG + 1);
       cerebro.on((ev) => {
+        if (!this.activo) { return; }
         if (ev.tipo === 'accion' && ev.accion === 'huir') { this.stats.huidas += 1; }
         this._emitir(ev);
       });
@@ -69,6 +69,10 @@
     on(fn) { this.oyentes.push(fn); return () => { this.oyentes = this.oyentes.filter((f) => f !== fn); }; }
     _emitir(ev) { for (const f of this.oyentes) { f(ev); } }
 
+    /** La mosca llega a este mundo / se va a otro. */
+    entrar() { this.activo = true; }
+    salir() { this.activo = false; }
+
     /** Hora del día de la mosca (0 = medianoche) o null si está en «siempre despierta». */
     hora() {
       if (this.modoReloj === 'despierta') { return null; }
@@ -76,7 +80,8 @@
         const d = new Date();
         return (d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()) / 86400;
       }
-      return (this.horaInicio + this.t / this.diaSeg) % 1;
+      const h = (this.horaInicio + this.t / this.diaSeg) % 1;
+      return h < 0 ? h + 1 : h;
     }
 
     /** Cambia el tamaño de la arena (la pantalla giró): todo se queda adentro. */
@@ -101,10 +106,7 @@
       o.vida0 = o.vida;
       if (o.olor) { o.olor = normalizarOlor(o.olor); }
       this.objetos.push(o);
-      while (this.objetos.length > MAX_OBJETOS) {
-        const i = this.objetos.findIndex((v) => v.tipo !== 'carta');
-        this.objetos.splice(i < 0 ? 0 : i, 1);
-      }
+      while (this.objetos.length > MAX_OBJETOS) { this.objetos.shift(); }
       if (tipo !== 'amenaza') { this.cerebro.despertar(0.35); }
       return o;
     }
@@ -114,51 +116,10 @@
       if (i >= 0) { this.objetos.splice(i, 1); }
     }
 
-    /** Quita todo lo que puso el jugador (las cartas pendientes se quedan: son trabajo). */
+    /** Quita todo lo que puso el jugador. */
     limpiar() {
-      this.objetos = this.objetos.filter((o) => o.tipo === 'carta');
+      this.objetos = [];
       this.viento.fuerza = 0;
-    }
-
-    /**
-     * Llega una carta (de otra app o de prueba). Si ya hay 3 en la arena, espera en la cola.
-     * c: { texto, olor, fuente, meta, id?, reentrega? } (reentrega: vuelve a ponerla tras recargar, sin contarla otra vez).
-     */
-    cartaNueva(c) {
-      const carta = { texto: String(c.texto || '').slice(0, 500), olor: normalizarOlor(c.olor || c.fuente || 'carta'),
-        fuente: String(c.fuente || 'prueba').slice(0, 40), meta: c.meta || null, recibida: Date.now(),
-        id: c.id || 'c' + Date.now().toString(36) + Math.floor(this.azar() * 1e6).toString(36) };
-      if (!c.reentrega) { this.stats.cartas += 1; }
-      if (this.objetos.filter((o) => o.tipo === 'carta').length >= MAX_CARTAS) {
-        this.cola.push(carta);
-        this._emitir({ tipo: 'carta-cola', carta, enCola: this.cola.length });
-      } else {
-        this._ponerCarta(carta);
-      }
-      return carta;
-    }
-
-    _ponerCarta(carta) {
-      const m = this.mosca;
-      let x = 0;
-      let y = 0;
-      for (let i = 0; i < 12; i += 1) {
-        x = 60 + this.azar() * (this.W - 120);
-        y = 60 + this.azar() * (this.H - 120);
-        if (Math.hypot(x - m.x, y - m.y) > Math.min(this.W, this.H) * 0.3) { break; }
-      }
-      const o = this.agregar('carta', x, y, { olor: carta.olor, carta });
-      this.cerebro.despertar(0.6);
-      this._emitir({ tipo: 'carta-llega', carta, x: o.x, y: o.y });
-    }
-
-    _resolverCarta(o, resultado, motivo) {
-      this.quitar(o);
-      const v = this.cerebro.valOlor.get(o.olor);
-      const valencia = v == null ? this.cerebro.valencia(o.olor).total : v;
-      if (resultado === 'aceptada') { this.stats.aceptadas += 1; } else { this.stats.descartadas += 1; }
-      this._emitir({ tipo: 'carta', resultado, motivo, carta: o.carta, valencia, x: o.x, y: o.y });
-      if (this.cola.length) { this._ponerCarta(this.cola.shift()); }
     }
 
     /** Toque en la arena sin herramienta: si fue sobre la mosca, la siente. */
@@ -283,28 +244,38 @@
       sen.dulce = Math.max(dulce, this._gotaDulce > 0 ? 1 : 0);
       sen.hora = this.hora();
       sen.actividad = clamp01(Math.abs(m.vel) / 120);
+      sen.contacto = 0;
+      this._sentidosExtra(sen);
       this.cerebro.sentir(sen);
     }
 
+    /** Lo que otros mundos le agregan a los sentidos (la pantalla: el contacto con lo que quiere tocar). */
+    _sentidosExtra() {}
+
     _paso(dt) {
       this.t += dt;
-      for (let i = this.objetos.length - 1; i >= 0; i -= 1) {
-        const o = this.objetos[i];
-        o.edad += dt;
-        o.vida -= dt;
-        if (o.tipo === 'carta') {
-          if (o.vida <= 0) { this._resolverCarta(o, 'descartada', 'nadie la recogió a tiempo'); } else { this._revisarCarta(o, dt); }
-        } else if (o.vida <= 0) {
-          this.objetos.splice(i, 1);
-        }
-      }
+      this._objetosPaso(dt);
       if (this.viento.fuerza > 0 && this.t > this.viento.hasta) { this.viento.fuerza = Math.max(0, this.viento.fuerza - dt * 0.5); }
       this._gotaDulce = Math.max(0, this._gotaDulce - dt);
 
       this._sensar();
       this.cerebro.pensar(dt);
       this._mover(dt);
+      this._despues(dt);
+    }
 
+    /** Las cosas envejecen y se van. */
+    _objetosPaso(dt) {
+      for (let i = this.objetos.length - 1; i >= 0; i -= 1) {
+        const o = this.objetos[i];
+        o.edad += dt;
+        o.vida -= dt;
+        if (o.vida <= 0) { this.objetos.splice(i, 1); }
+      }
+    }
+
+    /** Después de moverse: comer y ver adónde llegó. */
+    _despues(dt) {
       const accion = this.cerebro.accion();
       if (accion === 'comer' && this._comiendoDe) {
         const f = this._comiendoDe;
@@ -325,7 +296,7 @@
     _visitas() {
       const m = this.mosca;
       for (const o of this.objetos) {
-        if (o.visitado || !o.olor || o.tipo === 'carta') { continue; }
+        if (o.visitado || !o.olor) { continue; }
         if (Math.hypot(o.x - m.x, o.y - m.y) < 40) {
           o.visitado = true;
           const hayCanela = this.objetos.some((v) => v.olor === 'canela');
@@ -333,25 +304,6 @@
           if (o.olor === 'menta' && hayCanela) { this.stats.eligioMenta += 1; }
           this._emitir({ tipo: 'llego', olor: o.olor, eleccion: hayCanela && hayMenta });
         }
-      }
-    }
-
-    /**
-     * Decide una carta: la recoge si llega hasta ella y le gusta (valencia > 0); si la huele y no le gusta, la deja.
-     * Si nunca llega (duerme, huye, está lejos), caduca. La decisión es del cuerpo fungiforme, el cuerpo la hace visible.
-     */
-    _revisarCarta(o, dt) {
-      const m = this.mosca;
-      const v = this.cerebro.valOlor.get(o.olor);
-      const d = Math.hypot(m.x - o.x, m.y - o.y);
-      if (d < 28 && v != null && v > 0.02 && this.cerebro.accion() !== 'huir') {
-        this._resolverCarta(o, 'aceptada', 'la recogió');
-        return;
-      }
-      const c = this._sen.olores.get(o.olor);
-      o.olida = (o.olida || 0) + (c && c[0] > 0.05 ? dt : 0);
-      if (o.olida > 4 && v != null && v <= 0.02) {
-        this._resolverCarta(o, 'descartada', 'la olió y no le interesó');
       }
     }
 
@@ -423,6 +375,5 @@
   }
 
   Mundo.TIPOS = TIPOS;
-  Mundo.MAX_CARTAS = MAX_CARTAS;
   return Mundo;
 });

@@ -122,6 +122,29 @@
     return p;
   }
 
+  const mezclas = new Map();
+  /**
+   * Lo que huele cuando lleva algo (a) y se acerca a otra cosa (b). No es la suma: las células de Kenyon responden a
+   * las mezclas de forma no lineal, así que cada combinación tiene además un componente propio. Por eso puede aprender
+   * «#ventas va al celular» sin creer que todo va al celular ni que #ventas va a todas partes.
+   */
+  function patronMezcla(a, b) {
+    const k = a + '|' + b;
+    let p = mezclas.get(k);
+    if (!p) {
+      if (mezclas.size > 2000) { mezclas.clear(); }
+      const pa = patronOlor(a);
+      const pb = patronOlor(b);
+      const pc = patronOlor('mezcla:' + k);
+      p = new Float32Array(N_PN);
+      let m = 0;
+      for (let i = 0; i < N_PN; i += 1) { p[i] = 0.6 * pa[i] + pb[i] + 0.8 * pc[i]; m = Math.max(m, p[i]); }
+      for (let i = 0; i < N_PN; i += 1) { p[i] /= m; }
+      mezclas.set(k, p);
+    }
+    return p;
+  }
+
   // El anillo E-PG: las vecinas se excitan (coseno) y todas se inhiben un poco (inhibición global).
   const ANILLO = new Float32Array(N_EPG * N_EPG);
   const COS = new Float32Array(N_EPG);
@@ -177,7 +200,11 @@
       this.reloj = 0;
       this.sueno = 0;
       this.interno = { hambre: 0.45, saciedad: 0, fatiga: 0, susto: 0 };
-      this.s = { amenaza: 0, amenazaAng: 0, dulce: 0, tacto: 0, dolor: 0, calor: 0, hora: null, actividad: 0 };
+      this.s = { amenaza: 0, amenazaAng: 0, dulce: 0, contacto: 0, tacto: 0, dolor: 0, calor: 0, hora: null, actividad: 0 };
+      /** Lo que lleva agarrado (su olor), o null. Cambia cómo valora lo demás: «¿adónde llevo esto?». */
+      this.contexto = null;
+      /** El mundo puede decidir cómo se valora cada olor: (olor) → número, o null para lo de siempre. */
+      this.valuador = null;
       this.olores = new Map();
       this.luz = null;
       this.temp = null;
@@ -215,6 +242,7 @@
      *  olores: Map nombre → Float32Array(17) (0 = en las antenas, 1..16 = alrededor, sector i a i·22,5° del frente)
      *  luz: Float32Array(16) · temp: Float32Array(17) en °C · amenaza (0..1) y amenazaAng (relativo al frente)
      *  dulce (0..1, azúcar en la boca) · hora (0..1, 0 = medianoche; null = siempre despierta) · actividad (0..1)
+     *  contacto (0..1): está parada sobre algo que quiere tocar (en la pantalla, la trompa es su dedo)
      */
     sentir(sen) {
       this.olores = sen.olores || this.olores;
@@ -224,6 +252,7 @@
       s.amenaza = sen.amenaza || 0;
       s.amenazaAng = sen.amenazaAng || 0;
       s.dulce = sen.dulce || 0;
+      s.contacto = sen.contacto || 0;
       s.hora = sen.hora === undefined ? s.hora : sen.hora;
       s.actividad = sen.actividad || 0;
     }
@@ -265,6 +294,18 @@
       return true;
     }
 
+    /** Enseñarle una combinación: llevando el olor a, ir hacia b (signo +1) o no (signo -1). */
+    condicionarMezcla(a, b, signo, mag) {
+      a = normalizarOlor(a);
+      b = normalizarOlor(b);
+      const n = this._kenyon(patronMezcla(a, b), this._kcTmp);
+      if (!n) { return false; }
+      this._aprender(this._kcTmp, signo, mag == null ? 1 : mag);
+      if (signo > 0) { this.dan.pam = 1; } else { this.dan.ppl1 = 1; }
+      this._emitir({ tipo: 'aprende', olor: a, destino: b, signo, origen: 'condicionar' });
+      return true;
+    }
+
     _aprenderAhora(signo, mag) {
       // Lo que huele en este instante (por si el olor llegó después del último tick).
       this._lobuloAntenal(1);
@@ -294,6 +335,12 @@
         total += c0;
         const p = patronOlor(olor);
         for (let i = 0; i < N_PN; i += 1) { obj[i] += c0 * p[i]; }
+      }
+      if (this.contexto) {
+        // Lo que lleva en las patas también lo huele, siempre igual de cerca.
+        const p = patronOlor(this.contexto);
+        total += 0.6;
+        for (let i = 0; i < N_PN; i += 1) { obj[i] += 0.6 * p[i]; }
       }
       let m = 0;
       for (let i = 0; i < N_PN; i += 1) { m = Math.max(m, obj[i]); }
@@ -338,7 +385,10 @@
 
       // 5. Cuánto le gusta cada olor presente (innato + aprendido) y hacia dónde está lo bueno y lo malo.
       this.valOlor.clear();
-      for (const [olor] of this.olores) { this.valOlor.set(olor, this._innata(olor) + this._aprendida(olor)); }
+      for (const [olor] of this.olores) {
+        const v = this.valuador ? this.valuador(olor) : null;
+        this.valOlor.set(olor, v != null ? v : this._innata(olor) + this._aprendida(olor));
+      }
       let maxA = 0;
       let maxR = 0;
       const temp = this.temp;
@@ -407,7 +457,7 @@
       const dol = s.dolor;
       en[0] = 0.28 + 0.25 * ras.curiosidad + 0.15 * h - 0.7 * su - 0.6 * am;
       en[1] = 1.5 * atraccion - 0.9 * am - 0.6 * su - 0.5 * aversion;
-      en[2] = 1.6 * s.dulce * (0.15 + h) - 1.2 * am - 0.8 * dol;
+      en[2] = 1.6 * s.dulce * (0.15 + h) + 1.3 * s.contacto - 1.2 * am - 0.8 * dol;
       en[3] = 1.7 * am * (0.6 + 0.8 * ras.miedo) + 1.4 * dol + 1.1 * Math.max(0, aversion - 0.35) + s.calor;
       en[4] = 0.9 * s.tacto + 0.45 * it.saciedad + 0.08 - 0.6 * am - 0.3 * h;
       en[5] = 1.2 * su + 0.35 * it.fatiga - 0.9 * am - 0.4 * h - 0.5 * dol;
@@ -473,16 +523,22 @@
       return total;
     }
 
-    _aprendida(olor, detalle) {
+    _aprendida(olor, detalle) { return this._valPatron(olor, patronOlor(olor), detalle); }
+
+    _valPatron(clave, patron, detalle) {
       if (!detalle) {
-        const c = this._cacheVal.get(olor);
+        const c = this._cacheVal.get(clave);
         if (c && c.v === this._version) { return c.val; }
       }
-      const n = this._kenyon(patronOlor(olor), this._kcTmp);
+      if (this._cacheVal.size > 3000) { this._cacheVal.clear(); }
+      const n = this._kenyon(patron, this._kcTmp);
       const val = this._valencia(this._kcTmp, n, detalle);
-      this._cacheVal.set(olor, { v: this._version, val });
+      this._cacheVal.set(clave, { v: this._version, val });
       return val;
     }
+
+    /** Lo aprendido sobre llevar a hacia b (de −1 a 1). */
+    valenciaMezcla(a, b, detalle) { return this._valPatron(a + '|' + b, patronMezcla(a, b), detalle); }
 
     /** La dopamina deprime la vía contraria en las células activas: PAM la de «evitar», PPL1 la de «acercarse». */
     _aprender(kc, signo, mag) {
@@ -546,6 +602,6 @@
   }
 
   Object.assign(Cerebro, { N_PN, N_KC, KC_ACTIVAS, N_EPG, DT, ACCIONES, COMPARTIMENTOS, OLORES, NEURONAS, TOTAL_NEURONAS,
-    envolver, normalizarOlor, infoOlor, patronOlor, presionSueno, hash, azar, clamp01 });
+    envolver, normalizarOlor, infoOlor, patronOlor, patronMezcla, presionSueno, hash, azar, clamp01 });
   return Cerebro;
 });

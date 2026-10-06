@@ -1,6 +1,7 @@
 """
-Prueba la página en un Chrome sin ventana: que cargue sin errores, un recorrido de verdad (fruta, carta, 👍, tocar el
-cerebro, enlace con #estimulo) y capturas en celular y en escritorio.
+Prueba la página en un Chrome sin ventana: que cargue sin errores, un recorrido de verdad (fruta, premio, su pantalla
+de trabajo con toques reales, corrección 👎, enseñarle tocando tú, tocar el cerebro, enlace con #estimulo) y capturas en
+celular y en escritorio.
 
   py herramientas/probar.py [--url URL] [--capturas CARPETA] [--red]
 
@@ -117,10 +118,11 @@ def red(c, ok):
     llego = False
     for _ in range(40):
         c.esperar(0.25)
-        if c.js("Array.from(document.querySelectorAll('#bandeja .texto')).some(p => p.textContent.includes(%s))" % json.dumps(texto)):
+        if c.js("MoscaObrera.pantalla.pendientes().concat(Array.from(document.querySelectorAll('#registro .texto'), p => ({ texto: p.textContent })))"
+                ".some(t => t.texto.includes(%s))" % json.dumps(texto)):
             llego = True
             break
-    ok(llego, 'una carta mandada a ntfy.sh/%s llega a la bandeja' % tema)
+    ok(llego, 'un trabajo mandado a ntfy.sh/%s llega a su pantalla' % tema)
     c.js("""(() => { const i = document.querySelector('[data-cfg="salidaNtfy.activo"]'); i.checked = true; i.dispatchEvent(new Event('change'));
         document.querySelector('[data-probar="salidaNtfy"]').click(); })()""")
     for _ in range(40):
@@ -217,14 +219,50 @@ def main():
             c.js("for (let i = 0; i < 3; i++) document.querySelector('[data-accion=\"premio\"]').click()")
             v = c.js('MoscaObrera.cerebro.valencia("menta").total')
             ok(v > 0.2, 'tres premios oliendo menta → le gusta la menta (%.2f)' % v)
-            # Carta.
-            c.js('MoscaObrera.mundo.limpiar(); MoscaObrera.carta("Llegó un pedido nuevo", "ventas")')
-            c.esperar(6)
-            filas = c.js("Array.from(document.querySelectorAll('#bandeja li')).map(li => li.className)")
-            ok(bool(filas) and 'aceptada' in filas[0], 'la carta #ventas llegó a la bandeja y la recogió (%s)' % filas)
-            c.js("document.querySelector('#bandeja [data-fb=\"1\"]').click()")
+
+            def esperar_registro(n, seg=15):
+                for _ in range(int(seg * 4)):
+                    if c.js("document.querySelectorAll('#registro li').length") >= n:
+                        return True
+                    c.esperar(0.25)
+                return False
+
+            def primero():
+                return c.js("(() => { const li = document.querySelector('#registro li'); return li ? li.querySelector('.destino').textContent : ''; })()")
+
+            # Su pantalla de trabajo: le llega un trabajo, se va sola a trabajar y lo lleva con toques de verdad.
+            c.js("document.getElementById('zona').addEventListener('click', e => { if (e.target.closest('[data-widget]')) window.__clics = (window.__clics || 0) + 1; }, true)")
+            c.js("MoscaObrera.mundo.limpiar(); document.getElementById('zona').scrollIntoView({ block: 'center' })")
+            c.js('MoscaObrera.carta("Llegó un pedido nuevo", "ventas")')
+            ok(c.js('MoscaObrera.estado().lugar') == 'pantalla', 'al llegarle un trabajo se va sola a su pantalla')
+            ok(not c.js("document.getElementById('arena-fuera').hidden"), 'el laboratorio avisa que está trabajando')
+            c.esperar(1.6)
+            c.captura(caps / 'cel-4-pantalla.png')
+            ok(esperar_registro(1), 'terminó el primer trabajo')
+            ok('Archivo' in primero(), 'sin enseñarle nada lo lleva al 🗂️ Archivo (%s)' % primero())
+            clics = c.js('window.__clics || 0')
+            ok(clics >= 2, 'la mosca tocó la pantalla con clics de verdad (%d)' % clics)
+            # 👎 y «iba a 📱».
+            c.js("document.querySelector('#registro [data-fb=\"-1\"]').click()")
+            c.js("document.querySelector('#registro [data-dest=\"celular\"]').click()")
             mc = c.js('MoscaObrera.estado().marcador')
-            ok(mc['total'] == 1 and mc['ok'] == 1, 'el 👍 cuenta como acierto (%s)' % mc)
+            ok(mc['total'] == 1 and mc['ok'] == 0 and mc['racha'] == 0, '👎 + «iba a 📱» cuenta como error (%s)' % mc)
+            # Le enseñas tocando tú: el trabajo y después la app.
+            c.js('MoscaObrera.velocidad(0); MoscaObrera.carta("Otro pedido", "ventas")')
+            c.esperar(0.4)
+            c.js("""(() => { const z = document.getElementById('zona'); z.querySelector('.os-trabajo').click();
+                z.querySelector('[data-widget="app-celular"]').click(); })()""")
+            ok(esperar_registro(2, 3) and 'Celular' in primero() and '(tú)' in primero(), 'tocando tú el trabajo y la app, va ahí (%s)' % primero())
+            # Ahora sola.
+            c.js('MoscaObrera.velocidad(6); MoscaObrera.carta("Tercer pedido", "ventas")')
+            ok(esperar_registro(3), 'terminó el tercer trabajo')
+            ok('Celular' in primero() and '(tú)' not in primero(), 'después de corregirla y enseñarle, lleva #ventas a 📱 sola (%s)' % primero())
+            c.js("document.querySelector('#registro [data-fb=\"1\"]').click()")
+            mc = c.js('MoscaObrera.estado().marcador')
+            ok(mc['ok'] == 1 and mc['sueldo'] == 1, 'el 👍 cuenta como acierto y le paga con azúcar (%s)' % mc)
+            c.js("document.getElementById('registro').scrollIntoView({ block: 'center' })")
+            c.esperar(0.3)
+            c.captura(caps / 'cel-5-registro.png')
             # Cerebro: tocar una región muestra su explicación.
             c.js("document.getElementById('cerebro').scrollIntoView({ block: 'center' })")
             c.esperar(0.5)
@@ -240,23 +278,22 @@ def main():
             ok(c.js("MoscaObrera.mundo.objetos.some(o => o.tipo === 'calor')"), 'un enlace #estimulo=calor pone calor')
             c.js("document.getElementById('trabajo').scrollIntoView()")
             c.esperar(0.5)
-            c.captura(caps / 'cel-4-trabajo.png')
-            c.js("document.getElementById('bandeja').scrollIntoView({ block: 'center' })")
-            c.esperar(0.3)
-            c.captura(caps / 'cel-5-bandeja.png')
+            c.captura(caps / 'cel-6-conectar.png')
             c.js("document.getElementById('ciencia').scrollIntoView()")
             c.esperar(0.3)
-            c.captura(caps / 'cel-6-ciencia.png')
+            c.captura(caps / 'cel-7-ciencia.png')
             c.js("document.getElementById('api').scrollIntoView()")
             c.esperar(0.3)
-            c.captura(caps / 'cel-7-api.png')
+            c.captura(caps / 'cel-8-api.png')
             # Lo guardado sobrevive a recargar.
             c.js('dispatchEvent(new Event("pagehide"))')
             c.cmd('Page.reload')
             c.esperar(2.5)
             v2 = c.js('MoscaObrera.cerebro.valencia("menta").total')
             ok(v2 > 0.1, 'la memoria sobrevive a recargar la página (menta %.2f)' % v2)
-            ok(c.js("document.querySelectorAll('#bandeja li').length") >= 1, 'la bandeja sobrevive a recargar')
+            ok(c.js("document.querySelectorAll('#registro li').length") >= 3, 'el registro de trabajos sobrevive a recargar')
+            ok(c.js('MoscaObrera.estado().lugar') == 'pantalla', 'sigue en su pantalla después de recargar')
+            ok(c.js("MoscaObrera.pantalla.destinoPara('ventas')") == 'celular', 'recuerda que #ventas va a 📱')
 
             # ---------------------------------------------------------------- escritorio
             c.cmd('Emulation.setDeviceMetricsOverride', width=1366, height=900, deviceScaleFactor=1, mobile=False)
@@ -267,13 +304,18 @@ def main():
             c.js("MoscaObrera.estimulo('fruta'); MoscaObrera.estimulo('humo'); document.getElementById('jugar').scrollIntoView()")
             c.esperar(2)
             c.captura(caps / 'pc-2-lab.png')
+            c.js("MoscaObrera.velocidad(2); MoscaObrera.carta('Cliente pregunta por envío', 'soporte'); MoscaObrera.carta('Pedido 77', 'ventas');"
+                 "document.getElementById('oficina').scrollIntoView()")
+            c.esperar(2.5)
+            c.captura(caps / 'pc-3-pantalla.png')
             c.js("document.getElementById('trabajo').scrollIntoView()")
             c.esperar(0.4)
-            c.captura(caps / 'pc-3-trabajo.png')
+            c.captura(caps / 'pc-4-conectar.png')
             c.js("document.getElementById('ciencia').scrollIntoView()")
             c.esperar(0.4)
-            c.captura(caps / 'pc-4-ciencia.png')
+            c.captura(caps / 'pc-5-ciencia.png')
             if a.red:
+                c.js('MoscaObrera.velocidad(6)')
                 red(c, ok)
             errores = [e for e in c.errores() if 'favicon' not in e]
             ok(not errores, 'sin errores en la consola' + ('' if not errores else ': ' + ' | '.join(errores[:5])))

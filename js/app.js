@@ -1,18 +1,23 @@
 /**
- * Mosca Obrera: la página. Une el cerebro, la arena, las vistas y las conexiones; guarda la memoria en este
- * dispositivo; lleva las misiones y la bandeja de cartas.
+ * Mosca Obrera: la página. Une el cerebro, sus dos lugares (el laboratorio y la pantalla de trabajo), las vistas y
+ * las conexiones; guarda la memoria en este dispositivo; lleva las misiones y el registro de trabajos.
  */
 (function () {
   'use strict';
 
   const Cerebro = window.MoscaCerebro;
   const Mundo = window.MoscaMundo;
+  const Pantalla = window.MoscaPantalla;
   const Conexiones = window.MoscaConexiones;
-  const { VistaArena, VistaCerebro, EMOJI_ACCION, TEXTO_ACCION, colorOlor } = window.MoscaVista;
+  const { VistaArena, VistaCerebro, VistaPantalla, EMOJI_ACCION, TEXTO_ACCION, colorOlor } = window.MoscaVista;
   const { normalizarOlor, OLORES, COMPARTIMENTOS } = Cerebro;
   const CLAVE = 'mosca-obrera:v1';
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+  /** Qué salida usa cada app de la pantalla. */
+  const SALIDA = { celular: 'salidaNtfy', discord: 'discord', webhook: 'webhook', avisos: 'navegador' };
+  const INFO_APP = {};
+  for (const a of Pantalla.APPS) { INFO_APP[a.id] = a; }
 
   // ================================================================================================ estado guardado
   function leer() { try { return JSON.parse(localStorage.getItem(CLAVE)) || null; } catch (e) { return null; } }
@@ -27,22 +32,30 @@
     return base;
   }
 
-  const guardado = leer();
-  const cerebro = guardado && guardado.cerebro ? Cerebro.desde(guardado.cerebro) : new Cerebro();
+  const guardado = leer() || {};
+  const cerebro = guardado.cerebro ? Cerebro.desde(guardado.cerebro) : new Cerebro();
   const nombrePorDefecto = 'Mosca #' + String(cerebro.semilla % 10000).padStart(4, '0');
-  let nombre = (guardado && guardado.nombre) || nombrePorDefecto;
-  const config = mezclar(Conexiones.configInicial(), guardado && guardado.config);
-  const bandeja = Array.isArray(guardado && guardado.bandeja) ? guardado.bandeja : [];
-  const marcador = Object.assign({ ok: 0, total: 0, racha: 0 }, guardado && guardado.marcador);
-  const hechas = new Set((guardado && guardado.misiones) || []);
-  const mundo = new Mundo(cerebro, { W: 1000, H: 700, modoReloj: (guardado && guardado.modoReloj) || 'acelerado',
-    horaInicio: guardado && typeof guardado.hora === 'number' ? guardado.hora : 0.35 });
-  if (guardado && guardado.stats) { Object.assign(mundo.stats, guardado.stats); }
+  let nombre = guardado.nombre || nombrePorDefecto;
+  const config = mezclar(Conexiones.configInicial(), guardado.config);
+  const registro = Array.isArray(guardado.registro) ? guardado.registro : [];
+  const marcador = Object.assign({ ok: 0, total: 0, racha: 0, sueldo: 0 }, guardado.marcador);
+  const hechas = new Set(guardado.misiones || []);
+  let turnoAuto = guardado.turnoAuto !== false;
+  const reloj = { modoReloj: guardado.modoReloj || 'acelerado', horaInicio: typeof guardado.hora === 'number' ? guardado.hora : 0.35 };
+  const mundo = new Mundo(cerebro, Object.assign({ W: 1000, H: 700 }, reloj));
+  const pantalla = new Pantalla(cerebro, Object.assign({ W: 600, H: 720, tocar: tocarDeVerdad }, reloj));
+  if (guardado.stats) { Object.assign(mundo.stats, guardado.stats); }
+  if (guardado.statsPantalla) { Object.assign(pantalla.stats, guardado.statsPantalla); }
+  // La mosca está en un solo lugar: el laboratorio o la pantalla.
+  let activo = mundo;
+  pantalla.salir();
+  if (guardado.lugar === 'pantalla') { mundo.salir(); pantalla.entrar(); activo = pantalla; }
 
   function guardar() {
-    escribir({ v: 1, nombre, cerebro: cerebro.exportar(), config, bandeja: bandeja.slice(0, 40), marcador,
-      misiones: Array.from(hechas), stats: mundo.stats, modoReloj: mundo.modoReloj,
-      hora: mundo.modoReloj === 'acelerado' ? mundo.hora() : null });
+    escribir({ v: 1, nombre, cerebro: cerebro.exportar(), config, registro: registro.slice(0, 60), marcador,
+      misiones: Array.from(hechas), stats: mundo.stats, statsPantalla: pantalla.stats, modoReloj: activo.modoReloj,
+      hora: activo.modoReloj === 'acelerado' ? activo.hora() : null, lugar: activo === pantalla ? 'pantalla' : 'lab',
+      pendientes: pantalla.pendientes().slice(0, 100), turnoAuto });
   }
   setInterval(guardar, 15000);
   window.addEventListener('pagehide', guardar);
@@ -51,50 +64,76 @@
   // ================================================================================================ vistas
   const vArena = new VistaArena($('#arena'), mundo);
   const vCerebro = new VistaCerebro($('#cerebro'), cerebro);
-  const visible = { arena: true, cerebro: true };
+  const vPantalla = new VistaPantalla($('#zona'), $('#capa-mosca'), pantalla);
+  const visible = { arena: true, cerebro: true, zona: true };
 
   function ajustarArena() {
     const { W, H } = vArena.ajustar();
     mundo.redimensionar(W, H);
   }
+  function ajustarPantalla() {
+    const r = vPantalla.ajustar();
+    if (r) { pantalla.redimensionar(r.W, r.H); }
+  }
   if ('ResizeObserver' in window) {
     new ResizeObserver(ajustarArena).observe($('#arena-marco'));
     new ResizeObserver(() => vCerebro.ajustar()).observe($('#cerebro'));
+    new ResizeObserver(ajustarPantalla).observe($('#zona'));
   } else {
-    window.addEventListener('resize', () => { ajustarArena(); vCerebro.ajustar(); });
+    window.addEventListener('resize', () => { ajustarArena(); vCerebro.ajustar(); ajustarPantalla(); });
   }
   ajustarArena();
   vCerebro.ajustar();
+  ajustarPantalla();
   if ('IntersectionObserver' in window) {
     const io = new IntersectionObserver((ents) => { for (const e of ents) { visible[e.target.id] = e.isIntersecting; } });
     io.observe($('#arena'));
     io.observe($('#cerebro'));
+    io.observe($('#zona'));
   }
 
+  // ================================================================================================ el ciclo
   let velocidad = 1;
   let ultimo = performance.now();
   let tUI = 0;
   let tLento = 0;
-  function cuadro(ahora) {
+  let ventanaPip = null;
+  let generacion = 0;
+
+  function cuadro() {
+    // El reloj de esta ventana (la flotante tiene otro origen de tiempo).
+    const ahora = performance.now();
     const dt = Math.min(0.1, Math.max(0, (ahora - ultimo) / 1000));
     ultimo = ahora;
-    if (velocidad > 0) { mundo.paso(dt * velocidad); }
+    if (velocidad > 0) { activo.paso(dt * velocidad); }
     if (visible.arena) { vArena.dibujar(dt, ahora / 1000); }
     if (visible.cerebro) { vCerebro.dibujar(dt, ahora / 1000); }
+    if (visible.zona || ventanaPip) { vPantalla.dibujar(dt, ahora / 1000); }
     tUI += dt;
     tLento += dt;
     if (tUI > 0.2) { tUI = 0; pintarEstado(); }
     if (tLento > 1) { tLento = 0; pintarAprendido(); revisarMisiones(); }
-    requestAnimationFrame(cuadro);
   }
-  requestAnimationFrame(cuadro);
-  // Con la pestaña en segundo plano no hay cuadros: la mosca sigue trabajando a saltos de un segundo.
+
+  /** Arranca (o rearranca) el ciclo de cuadros en la ventana que se ve: la página o la ventana flotante. */
+  function lanzar() {
+    const g = ++generacion;
+    const ventana = () => (ventanaPip && !ventanaPip.closed ? ventanaPip : window);
+    const f = () => {
+      if (g !== generacion) { return; }
+      cuadro();
+      ventana().requestAnimationFrame(f);
+    };
+    ventana().requestAnimationFrame(f);
+  }
+  lanzar();
+  // Con la pestaña en segundo plano (y sin ventana flotante) no hay cuadros: sigue trabajando a saltos de un segundo.
   setInterval(() => {
-    if (!document.hidden) { return; }
+    if (!document.hidden || ventanaPip) { return; }
     const ahora = performance.now();
     const dt = (ahora - ultimo) / 1000;
     ultimo = ahora;
-    if (velocidad > 0) { mundo.paso(Math.min(dt, 120) * velocidad); }
+    if (velocidad > 0) { activo.paso(Math.min(dt, 120) * velocidad); }
   }, 1000);
 
   // ================================================================================================ avisos
@@ -106,6 +145,34 @@
     clearTimeout(tAviso);
     if (texto) { tAviso = setTimeout(() => el.classList.remove('ver'), ms || 2800); }
   }
+
+  // ================================================================================================ dónde está
+  function mudarA(destino) {
+    const a = destino === 'pantalla' ? pantalla : mundo;
+    if (activo === a) { return; }
+    // El día sigue igual en el otro lugar.
+    const h = activo.hora();
+    activo.salir();
+    a.modoReloj = activo.modoReloj;
+    if (a.modoReloj === 'acelerado' && h != null) { a.horaInicio = h - a.t / a.diaSeg; }
+    a.mosca.vel = 0;
+    a.mosca.rastro.length = 0;
+    a.entrar();
+    activo = a;
+    pintarLugar();
+    guardar();
+  }
+
+  function pintarLugar() {
+    const enPantalla = activo === pantalla;
+    $('#donde').textContent = enPantalla ? '💼 Está trabajando en su pantalla' : '🧪 Está en el laboratorio';
+    $('#mudar').textContent = enPantalla ? '🧪 Traerla al laboratorio' : '💼 Llevarla a trabajar';
+    $('#os-ausente').hidden = enPantalla;
+    $('#arena-fuera').hidden = !enPantalla;
+  }
+
+  $('#mudar').addEventListener('click', () => mudarA(activo === pantalla ? 'lab' : 'pantalla'));
+  for (const b of $$('[data-mudar]')) { b.addEventListener('click', () => mudarA(b.dataset.mudar)); }
 
   // ================================================================================================ estado de la mosca
   const nombreInput = $('#nombre-mosca');
@@ -123,22 +190,28 @@
 
   function pintarEstado() {
     const a = cerebro.accion();
-    $('#accion-actual').textContent = EMOJI_ACCION[a] + ' ' + TEXTO_ACCION[a];
+    const enPantalla = activo === pantalla;
+    $('#accion-actual').textContent = enPantalla ? '💼 trabajando' : EMOJI_ACCION[a] + ' ' + TEXTO_ACCION[a];
     $('#accion-actual').dataset.accion = a;
     $('#m-hambre').style.width = Math.round(cerebro.interno.hambre * 100) + '%';
     $('#m-sueno').style.width = Math.round(cerebro.sueno * 100) + '%';
     $('#m-susto').style.width = Math.round(cerebro.interno.susto * 100) + '%';
-    const h = mundo.hora();
+    const h = activo.hora();
     let icono = '⚡';
     if (h != null) { icono = h < 0.22 || h > 0.86 ? '🌙' : (h < 0.3 || h > 0.78 ? '🌅' : '☀️'); }
-    $('#hora-mosca').textContent = h == null ? '⚡ despierta' : icono + ' ' + formatoHora(h);
+    const hora = h == null ? '⚡ despierta' : icono + ' ' + formatoHora(h);
+    $('#hora-mosca').textContent = hora;
+    $('#os-hora').textContent = h == null ? '⚡' : formatoHora(h);
+    $('#os-bateria').textContent = '🔋 ' + Math.round((1 - cerebro.interno.hambre) * 100) + '%';
+    $('#os-estado').textContent = !enPantalla ? '🧪 fuera' : (a === 'descansar' ? '💤 durmiendo' : '💼 trabajando');
+    $('#os-vacia').hidden = !!(pantalla.carga || pantalla.objetos.some((o) => o.tipo === 'carta'));
   }
 
-  /** Los olores que vale la pena mostrar: los del laboratorio, los de las cartas recientes y los que hay en la arena. */
+  /** Los olores que vale la pena mostrar: los del laboratorio, los de los trabajos recientes y los que hay en la arena. */
   function oloresAMostrar() {
     const lista = ['fruta', 'menta', 'canela', 'humo'];
     for (const o of mundo.objetos) { if (o.olor && lista.indexOf(o.olor) < 0) { lista.push(o.olor); } }
-    for (const c of bandeja) {
+    for (const c of registro) {
       if (lista.length >= 12) { break; }
       if (lista.indexOf(c.olor) < 0) { lista.push(c.olor); }
     }
@@ -146,7 +219,6 @@
   }
 
   function pintarAprendido() {
-    const ul = $('#aprendido');
     const filas = [];
     for (const olor of oloresAMostrar()) {
       const v = cerebro.valencia(olor);
@@ -156,7 +228,8 @@
       const nom = document.createElement('span');
       nom.className = 'olor-nombre';
       nom.style.setProperty('--c', colorOlor(olor));
-      nom.textContent = OLORES[olor] ? info.nombre : '#' + olor;
+      nom.textContent = OLORES[olor] ? info.nombre : '#' + olor + ' → ' + INFO_APP[pantalla.destinoPara(olor)].emoji;
+      if (!OLORES[olor]) { nom.title = 'Adónde lo llevaría hoy'; }
       const barra = document.createElement('span');
       barra.className = 'val';
       const relleno = document.createElement('span');
@@ -179,10 +252,10 @@
       li.append(nom, barra, comps, num);
       filas.push(li);
     }
-    ul.replaceChildren(...filas);
+    $('#aprendido').replaceChildren(...filas);
   }
 
-  // ================================================================================================ herramientas
+  // ================================================================================================ laboratorio
   let herramienta = null;
   const NOMBRES_HERR = { fruta: '🍌 fruta', menta: '🌿 olor A', canela: '🍂 olor B', humo: '🌫️ humo', luz: '💡 luz',
     calor: '🔥 calor', amenaza: '🖐️ la mano', viento: '🌬️ viento (sopla desde donde toques)' };
@@ -194,17 +267,26 @@
   for (const b of $$('[data-herr]')) { b.addEventListener('click', () => elegir(b.dataset.herr)); }
   for (const b of $$('[data-accion]')) { b.addEventListener('click', () => inmediata(b.dataset.accion)); }
 
+  function estaFuera() {
+    if (activo === mundo) { return false; }
+    aviso('💼 Está trabajando en su pantalla. Tráela al laboratorio para jugar.');
+    return true;
+  }
+
   function inmediata(a) {
-    if (a === 'premio') { mundo.premio(); } else if (a === 'castigo') { mundo.castigo(); } else if (a === 'limpiar') {
+    if (a === 'limpiar') {
       mundo.limpiar();
-      aviso('🧹 Arena limpia (las cartas pendientes se quedan).');
+      aviso('🧹 Arena limpia.');
+      return;
     }
+    if (estaFuera()) { return; }
+    if (a === 'premio') { mundo.premio(); } else if (a === 'castigo') { mundo.castigo(); }
   }
 
   $('#arena').addEventListener('click', (e) => {
     const p = vArena.aMundo(e.clientX, e.clientY);
     if (!herramienta) {
-      if (!mundo.tocarEn(p.x, p.y)) { aviso('Elige algo abajo para ponerlo, o toca a la mosca.'); }
+      if (activo === mundo && !mundo.tocarEn(p.x, p.y)) { aviso('Elige algo abajo para ponerlo, o toca a la mosca.'); }
       return;
     }
     if (herramienta === 'viento') { mundo.vientoDesde(p.x, p.y); } else { mundo.agregar(herramienta, p.x, p.y); }
@@ -228,127 +310,167 @@
   }
 
   const selReloj = $('#modo-reloj');
-  selReloj.value = mundo.modoReloj;
+  selReloj.value = activo.modoReloj;
   selReloj.addEventListener('change', () => {
-    const h = mundo.hora();
-    if (selReloj.value === 'acelerado') { mundo.horaInicio = (h == null ? 0.35 : h) - mundo.t / mundo.diaSeg; }
-    mundo.modoReloj = selReloj.value;
+    const h = activo.hora();
+    for (const m of [mundo, pantalla]) {
+      if (selReloj.value === 'acelerado') { m.horaInicio = (h == null ? 0.35 : h) - m.t / m.diaSeg; }
+      m.modoReloj = selReloj.value;
+    }
     guardar();
   });
 
-  // ================================================================================================ eventos del mundo
   mundo.on((ev) => {
-    switch (ev.tipo) {
-      case 'aprende':
-        if (ev.origen === 'condicionar') { break; }
-        if (ev.signo > 0) {
-          aviso(ev.olor ? '🍬 Asoció el premio con ' + nombreOlor(ev.olor) : '🍬 Rico, pero no olía nada: no asoció nada con el premio.');
-        } else {
-          aviso(ev.olor ? '⚡ Asoció la descarga con ' + nombreOlor(ev.olor) : '⚡ ¡Auch! No olía nada, así que no asoció nada.');
-        }
-        if (ev.olor) {
-          conexiones.avisar({ regla: 'aprende', olor: ev.olor, titulo: (ev.signo > 0 ? '🍬 ' : '⚡ ') + nombre + ' aprendió algo',
-            texto: (ev.signo > 0 ? 'Ahora le gusta más ' : 'Ahora evita más ') + nombreOlor(ev.olor) });
-        }
-        break;
-      case 'carta-llega': entradaCarta(ev.carta, 'arena'); break;
-      case 'carta-cola': entradaCarta(ev.carta, 'cola'); break;
-      case 'carta': resolverCarta(ev); break;
-      case 'accion':
-        if (ev.accion === 'huir') {
-          conexiones.avisar({ regla: 'huida', titulo: '💨 ' + nombre + ' se asustó', texto: 'Algo la hizo huir.' });
-        }
-        break;
-      case 'se-acabo': aviso('🍌 Se acabó la fruta.'); break;
-      case 'llego':
-        if (ev.olor === 'menta' && ev.eleccion && cerebro.valencia('menta').total > cerebro.valencia('canela').total + 0.1) {
-          completar('laberinto');
-        }
-        break;
-      default:
+    if (ev.tipo === 'aprende' && ev.origen !== 'condicionar') {
+      if (ev.signo > 0) {
+        aviso(ev.olor ? '🍬 Asoció el premio con ' + nombreOlor(ev.olor) : '🍬 Rico, pero no olía nada: no asoció nada con el premio.');
+      } else {
+        aviso(ev.olor ? '⚡ Asoció la descarga con ' + nombreOlor(ev.olor) : '⚡ ¡Auch! No olía nada, así que no asoció nada.');
+      }
+    } else if (ev.tipo === 'se-acabo') {
+      aviso('🍌 Se acabó la fruta.');
+    } else if (ev.tipo === 'llego' && ev.olor === 'menta' && ev.eleccion &&
+      cerebro.valencia('menta').total > cerebro.valencia('canela').total + 0.1) {
+      completar('laberinto');
     }
   });
 
   function nombreOlor(olor) { return OLORES[olor] ? OLORES[olor].nombre : '#' + olor; }
 
-  // ================================================================================================ cartas y bandeja
-  function aplicar(r, origen) {
-    if (!r) { return; }
-    if (r.tipo === 'carta') {
-      mundo.cartaNueva({ texto: r.texto, olor: r.olor, fuente: r.fuente || origen, meta: r.meta || null });
-    } else if (r.tipo === 'feedback') {
-      cerebro.condicionar(r.olor, r.signo, 1.5);
-      aviso((r.signo > 0 ? '👍 ' : '👎 ') + 'Desde ' + origen + ': ' + (r.signo > 0 ? 'le interesa ' : 'no le interesa ') + '#' + r.olor);
-    } else if (r.tipo === 'estimulo') {
-      estimular(r.estimulo, r.fuerza, origen);
-    }
+  // ================================================================================================ la pantalla de trabajo
+  /** El toque de la mosca es un clic de verdad sobre el botón que tiene debajo (el mismo que tocarías tú). */
+  let tocaLaMosca = false;
+  function tocarDeVerdad(x, y, id) {
+    vPantalla.sincronizar(performance.now() / 1000);
+    const c = vPantalla.aCliente(x, y);
+    const el = vPantalla.zona.ownerDocument.elementFromPoint(c.x, c.y);
+    const w = el && el.closest('[data-widget]');
+    if (!w || w.dataset.widget !== id) { return false; }
+    tocaLaMosca = true;
+    try { w.click(); } finally { tocaLaMosca = false; }
+    return true;
   }
 
-  function lugarCerca(min, max) {
-    const m = mundo.mosca;
-    for (let i = 0; i < 30; i += 1) {
-      const a = Math.random() * Math.PI * 2;
-      const d = min + Math.random() * (max - min);
-      const x = m.x + Math.cos(a) * d;
-      const y = m.y + Math.sin(a) * d;
-      if (x > 40 && x < mundo.W - 40 && y > 40 && y < mundo.H - 40) { return { x, y }; }
-    }
-    return { x: mundo.W / 2, y: mundo.H / 2 };
-  }
+  $('#zona').addEventListener('click', (e) => {
+    const w = e.target.closest('[data-widget]');
+    if (w) { pantalla.activar(w.dataset.widget, tocaLaMosca ? 'mosca' : 'tu'); }
+  });
 
-  function estimular(e, fuerza, origen) {
-    const m = mundo.mosca;
-    if (e === 'premio') { mundo.premio(); } else if (e === 'castigo') { mundo.castigo(); } else if (e === 'limpiar') { mundo.limpiar(); } else if (e === 'viento') {
-      const a = Math.random() * Math.PI * 2;
-      mundo.vientoDesde(mundo.W / 2 + Math.cos(a) * mundo.W, mundo.H / 2 + Math.sin(a) * mundo.H, 0.4 + 0.6 * (fuerza == null ? 1 : fuerza));
-    } else if (e === 'amenaza') {
-      const a = Math.random() * Math.PI * 2;
-      mundo.agregar('amenaza', m.x + Math.cos(a) * 90, m.y + Math.sin(a) * 90);
+  pantalla.on((ev) => {
+    switch (ev.tipo) {
+      case 'trabajo-llega':
+      case 'trabajo-cola':
+        if (activo === mundo && turnoAuto) {
+          mudarA('pantalla');
+          aviso('💼 Se fue a trabajar: llegó #' + ev.trabajo.olor);
+        } else if (activo === mundo) {
+          aviso('📨 Le llegó un trabajo #' + ev.trabajo.olor + ' a su pantalla');
+        }
+        break;
+      case 'elegido':
+        if (ev.trabajo) { aviso('Ahora toca la app adonde va #' + ev.trabajo.olor); }
+        break;
+      case 'sin-eleccion':
+        aviso('Primero toca un trabajo; después, la app adonde va.');
+        break;
+      case 'trabajo':
+        alTerminar(ev);
+        break;
+      default:
+    }
+  });
+
+  /** Un trabajo terminó: queda en el registro y, si fue a una app conectada, sale de verdad por ahí. */
+  function alTerminar(ev) {
+    const t = ev.trabajo;
+    const e = { id: t.id, texto: t.texto, olor: t.olor, fuente: t.fuente, meta: t.meta, t: Date.now(), app: ev.app,
+      quien: ev.quien, resultado: ev.resultado, motivo: ev.motivo, valencia: Math.round(ev.valencia * 100) / 100,
+      envio: null, nivel: 'info', fb: ev.quien === 'tu' ? 1 : null, correcta: null, acierto: null, preguntando: false };
+    registro.unshift(e);
+    if (registro.length > 60) { registro.length = 60; }
+    if (ev.resultado === 'ignorado') {
+      e.envio = '🗑️ ' + ev.motivo;
+    } else if (SALIDA[ev.app]) {
+      e.envio = 'enviando…';
+      enviar(e, ev.app).then((r) => { e.envio = r.texto; e.nivel = r.nivel; pintarRegistro(); guardar(); });
     } else {
-      const p = lugarCerca(160, 320);
-      mundo.agregar(e, p.x, p.y);
+      e.envio = ev.app === 'archivo' ? '🗂️ guardado en el archivo' : '🗑️ a la papelera';
     }
-    if (origen && origen !== 'herramienta') { aviso('📨 Desde ' + origen + ': ' + e); }
-  }
-
-  function entradaCarta(carta, estado) {
-    let e = bandeja.find((x) => x.id === carta.id);
-    if (!e) {
-      e = { id: carta.id, texto: carta.texto, olor: carta.olor, fuente: carta.fuente, t: Date.now(), estado, fb: null, acierto: null };
-      bandeja.unshift(e);
-      if (bandeja.length > 60) { bandeja.length = 60; }
-      if (carta.fuente !== 'prueba') { aviso('📨 Llegó una carta #' + carta.olor + ' (' + carta.fuente + ')'); }
-    }
-    e.estado = estado;
-    pintarBandeja();
-  }
-
-  function resolverCarta(ev) {
-    const c = ev.carta;
-    const e = bandeja.find((x) => x.id === c.id);
-    if (e) {
-      e.estado = ev.resultado;
-      e.motivo = ev.motivo;
-      e.valencia = Math.round(ev.valencia * 100) / 100;
-    }
-    pintarBandeja();
+    if (ev.quien === 'tu') { e.envio += ' · lo hiciste tú: aprendió mirándote'; }
+    pintarRegistro();
     guardar();
-    const datos = { valencia: Math.round(ev.valencia * 100) / 100, carta: { texto: c.texto, olor: c.olor, fuente: c.fuente, meta: c.meta } };
-    if (ev.resultado === 'aceptada') {
-      conexiones.avisar({ regla: 'aceptada', olor: c.olor, titulo: '🪰 ' + nombre + ' recogió una carta #' + c.olor, texto: c.texto, datos });
+  }
+
+  /** Manda un trabajo por la salida de una app. Devuelve { texto, nivel } para el registro. */
+  async function enviar(e, app) {
+    const info = INFO_APP[app];
+    const salida = SALIDA[app];
+    if (!config[salida].activo) { return { texto: info.emoji + ' sin conectar: quedó en el archivo', nivel: 'info' }; }
+    const r = await conexiones.enviarA(salida, {
+      titulo: '🪰 ' + nombre + ' te manda #' + e.olor, texto: e.texto, olor: e.olor, evento: 'entregado',
+      datos: { app, quien: e.quien, valencia: e.valencia, trabajo: { texto: e.texto, olor: e.olor, fuente: e.fuente, meta: e.meta } }
+    });
+    return { texto: info.emoji + ' ' + r.detalle, nivel: r.ok ? 'ok' : 'error' };
+  }
+
+  function contarAcierto(e, acierto) {
+    e.acierto = acierto;
+    marcador.total += 1;
+    if (acierto) { marcador.ok += 1; marcador.racha += 1; } else { marcador.racha = 0; }
+  }
+
+  /** 👍: lo hizo bien. Se refuerza lo que hizo y se le paga con azúcar. */
+  function bien(e) {
+    e.fb = 1;
+    if (e.resultado === 'ignorado') {
+      cerebro.condicionar(e.olor, -1, 1.5);
     } else {
-      conexiones.avisar({ regla: 'descartada', olor: c.olor, titulo: '🗑️ ' + nombre + ' dejó una carta #' + c.olor, texto: c.texto + ' (' + ev.motivo + ')', datos });
+      cerebro.condicionarMezcla(e.olor, 'app-' + e.app, 1, 1.5);
+      cerebro.condicionar(e.olor, 1, 0.5);
+    }
+    contarAcierto(e, true);
+    cerebro.interno.hambre = Math.max(0, cerebro.interno.hambre - 0.08);
+    marcador.sueldo += 1;
+    aviso('🍬 Le pagaste con azúcar: «#' + e.olor + ' → ' + INFO_APP[e.app].emoji + '» queda reforzado');
+  }
+
+  /** 👎 + adónde iba: se debilita lo que hizo, se refuerza lo correcto y se reenvía ahí. */
+  function corregir(e, destino) {
+    if (destino === e.app) { bien(e); return; }
+    e.fb = -1;
+    e.correcta = destino;
+    e.preguntando = false;
+    if (e.resultado === 'ignorado') {
+      if (destino !== 'papelera') { cerebro.condicionar(e.olor, 1, 1.5); }
+    } else {
+      cerebro.condicionarMezcla(e.olor, 'app-' + e.app, -1, 1.5);
+    }
+    cerebro.condicionarMezcla(e.olor, 'app-' + destino, 1, 1.5);
+    contarAcierto(e, false);
+    aviso('👎 Aprendió: #' + e.olor + ' va a ' + INFO_APP[destino].emoji + ' ' + INFO_APP[destino].nombre);
+    if (SALIDA[destino]) {
+      e.reenvio = 'reenviando…';
+      enviar(e, destino).then((r) => { e.reenvio = 'reenviado: ' + r.texto; pintarRegistro(); guardar(); });
     }
   }
 
-  const ESTADOS = { arena: '⏳ oliéndola', cola: '🕓 en espera', aceptada: '✅ la recogió', descartada: '🗑️ la dejó', perdida: '💤 se perdió' };
+  $('#registro').addEventListener('click', (ev) => {
+    const b = ev.target.closest('button');
+    if (!b) { return; }
+    const e = registro.find((x) => x.id === b.closest('li').dataset.id);
+    if (!e || e.fb != null) { return; }
+    if (b.dataset.fb === '1') { bien(e); } else if (b.dataset.fb === '-1') { e.preguntando = true; } else if (b.dataset.fb === 'no') {
+      e.preguntando = false;
+    } else if (b.dataset.dest) { corregir(e, b.dataset.dest); }
+    pintarRegistro();
+    guardar();
+  });
 
-  function pintarBandeja() {
-    const ul = $('#bandeja');
+  function pintarRegistro() {
     const filas = [];
-    for (const e of bandeja.slice(0, 40)) {
+    for (const e of registro.slice(0, 40)) {
       const li = document.createElement('li');
-      li.className = 'carta ' + e.estado;
+      li.className = 'hecho' + (e.resultado === 'ignorado' ? ' ignorado' : '');
       li.dataset.id = e.id;
       const cab = document.createElement('div');
       cab.className = 'cabeza';
@@ -359,74 +481,131 @@
       const fuente = document.createElement('span');
       fuente.className = 'fuente';
       fuente.textContent = e.fuente;
-      const res = document.createElement('span');
-      res.className = 'res';
-      res.textContent = ESTADOS[e.estado] || e.estado;
-      if (e.motivo) { res.title = e.motivo; }
+      const destino = document.createElement('span');
+      destino.className = 'destino';
+      destino.textContent = e.resultado === 'ignorado' ? '🗑️ lo ignoró' : '→ ' + INFO_APP[e.app].emoji + ' ' + INFO_APP[e.app].nombre +
+        (e.quien === 'tu' ? ' (tú)' : '');
       const t = document.createElement('time');
       const d = new Date(e.t);
       t.textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-      cab.append(olor, fuente, res, t);
+      cab.append(olor, fuente, destino, t);
       const p = document.createElement('p');
       p.className = 'texto';
       p.textContent = e.texto;
+      const envio = document.createElement('p');
+      envio.className = 'envio';
+      envio.dataset.nivel = e.nivel || 'info';
+      envio.textContent = e.envio + (e.reenvio ? ' · ' + e.reenvio : '');
       const fb = document.createElement('div');
       fb.className = 'fb';
-      if (e.fb == null) {
-        const si = document.createElement('button');
-        si.className = 'chico';
-        si.dataset.fb = '1';
-        si.textContent = '👍 me interesa';
-        const no = document.createElement('button');
-        no.className = 'chico';
-        no.dataset.fb = '-1';
-        no.textContent = '👎 no me interesa';
-        fb.append(si, no);
-      } else {
+      if (e.fb == null && !e.preguntando) {
+        fb.append(boton('👍 bien', { fb: '1' }), boton('👎 no', { fb: '-1' }));
+      } else if (e.fb == null) {
+        const ad = document.createElement('div');
+        ad.className = 'adonde';
+        ad.append('¿Adónde iba?');
+        for (const a of Pantalla.APPS) { ad.append(boton(a.emoji, { dest: a.id }, a.nombre)); }
+        ad.append(boton('cancelar', { fb: 'no' }));
+        fb.append(ad);
+      } else if (e.quien !== 'tu') {
         const v = document.createElement('span');
         v.className = 'veredicto';
-        v.textContent = (e.fb > 0 ? '👍 te interesa' : '👎 no te interesa') +
-          (e.acierto === true ? ' · ✅ acertó' : (e.acierto === false ? ' · ❌ se equivocó (ya aprendió)' : ''));
+        v.textContent = e.acierto ? '👍 bien hecho · 🍬 cobró' : '👎 iba a ' + INFO_APP[e.correcta].emoji + ' ' + INFO_APP[e.correcta].nombre + ' · ya aprendió';
         fb.append(v);
       }
-      li.append(cab, p, fb);
+      li.append(cab, p, envio, fb);
       filas.push(li);
     }
-    ul.replaceChildren(...filas);
-    $('#bandeja-vacia').hidden = bandeja.length > 0;
-    $('#b-recibidas').textContent = String(mundo.stats.cartas);
-    $('#b-aceptadas').textContent = String(mundo.stats.aceptadas);
-    $('#b-aciertos').textContent = marcador.total ? marcador.ok + '/' + marcador.total : '–';
-    $('#b-racha').textContent = String(marcador.racha);
+    $('#registro').replaceChildren(...filas);
+    $('#registro-vacio').hidden = registro.length > 0;
+    $('#r-hechos').textContent = String(pantalla.stats.hechos + pantalla.stats.ignorados);
+    $('#r-aciertos').textContent = marcador.total ? marcador.ok + '/' + marcador.total : '–';
+    $('#r-racha').textContent = String(marcador.racha);
+    $('#r-sueldo').textContent = String(marcador.sueldo);
   }
 
-  $('#bandeja').addEventListener('click', (ev) => {
-    const b = ev.target.closest('[data-fb]');
-    if (!b) { return; }
-    const id = b.closest('li').dataset.id;
-    const e = bandeja.find((x) => x.id === id);
-    if (!e || e.fb != null) { return; }
-    const signo = Number(b.dataset.fb);
-    e.fb = signo;
-    cerebro.condicionar(e.olor, signo, 1.5);
-    if (e.estado === 'aceptada' || e.estado === 'descartada') {
-      e.acierto = (e.estado === 'aceptada') === (signo > 0);
-      marcador.total += 1;
-      if (e.acierto) { marcador.ok += 1; marcador.racha += 1; } else { marcador.racha = 0; }
-    }
-    aviso(signo > 0 ? '👍 Aprendió que #' + e.olor + ' te interesa' : '👎 Aprendió que #' + e.olor + ' no te interesa');
-    pintarBandeja();
-    guardar();
-  });
+  function boton(texto, data, titulo) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chico';
+    b.textContent = texto;
+    for (const k of Object.keys(data)) { b.dataset[k] = data[k]; }
+    if (titulo) { b.title = titulo; b.setAttribute('aria-label', titulo); }
+    return b;
+  }
 
   $('#form-prueba').addEventListener('submit', (ev) => {
     ev.preventDefault();
     const texto = $('#texto-prueba').value.trim();
     if (!texto) { return; }
     const r = Conexiones.interpretarMensaje({ texto, fuente: 'prueba' });
-    aplicar(r, 'prueba');
-    if (r && r.tipo === 'carta') { document.getElementById('arena').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    if (r && r.tipo === 'carta') {
+      mudarA('pantalla');
+      aplicar(r, 'prueba');
+    } else {
+      aplicar(r, 'prueba');
+    }
   });
+
+  const chkTurno = $('#turno-auto');
+  chkTurno.checked = turnoAuto;
+  chkTurno.addEventListener('change', () => { turnoAuto = chkTurno.checked; guardar(); });
+
+  // ---------------------------------------------------------------------------------------------- ventana flotante
+  /** Saca la pantalla a una ventana que flota encima de todo (Document Picture-in-Picture: Chrome y Edge de escritorio). */
+  async function flotante() {
+    if (ventanaPip) { ventanaPip.close(); return; }
+    if (!('documentPictureInPicture' in window)) {
+      aviso('Tu navegador no puede sacar ventanas flotantes. Sirve en Chrome o Edge de computadora.', 4000);
+      return;
+    }
+    const disp = $('#dispositivo');
+    let pip;
+    try {
+      pip = await window.documentPictureInPicture.requestWindow({ width: 420, height: 600 });
+    } catch (e) {
+      aviso('No se pudo abrir la ventana flotante: ' + e.message, 4000);
+      return;
+    }
+    for (const hoja of Array.from(document.styleSheets)) {
+      try {
+        const st = pip.document.createElement('style');
+        st.textContent = Array.from(hoja.cssRules).map((r) => r.cssText).join('\n');
+        pip.document.head.appendChild(st);
+      } catch (e) {
+        if (hoja.href) {
+          const l = pip.document.createElement('link');
+          l.rel = 'stylesheet';
+          l.href = hoja.href;
+          pip.document.head.appendChild(l);
+        }
+      }
+    }
+    pip.document.title = nombre + ' · Mosca OS';
+    pip.document.body.classList.add('en-pip');
+    const hueco = document.createElement('div');
+    hueco.className = 'panel hueco-pip';
+    hueco.textContent = '📺 Su pantalla está en la ventana flotante.';
+    disp.before(hueco);
+    pip.document.body.append(disp);
+    ventanaPip = pip;
+    if (activo !== pantalla) { mudarA('pantalla'); }
+    pip.addEventListener('resize', ajustarPantalla);
+    pip.addEventListener('pagehide', () => {
+      hueco.replaceWith(disp);
+      ventanaPip = null;
+      $('#flotante').textContent = '📺 Sacar en ventana flotante';
+      ajustarPantalla();
+      lanzar();
+    });
+    $('#flotante').textContent = '📺 Devolver a la página';
+    ajustarPantalla();
+    lanzar();
+  }
+  $('#flotante').addEventListener('click', flotante);
+  if (!('documentPictureInPicture' in window)) {
+    $('#ayuda-flotante').textContent = 'La ventana flotante (que queda encima de todo mientras usas la compu) funciona en Chrome o Edge de escritorio.';
+  }
 
   // ================================================================================================ misiones
   const MISIONES = [
@@ -435,9 +614,10 @@
     { id: 'pavlov', titulo: 'Pavlov para moscas', pista: 'Pon 🌿 Olor A pegado a ella y dale 🍬 Premio tres veces mientras lo huele.', ok: () => cerebro.valencia('menta').total >= 0.25 },
     { id: 'aversion', titulo: 'Mala experiencia', pista: 'Pon 🍂 Olor B pegado a ella y dale ⚡ Castigo un par de veces mientras lo huele.', ok: () => cerebro.valencia('canela').total <= -0.2 },
     { id: 'laberinto', titulo: 'El examen', pista: 'Con la memoria fresca, 🧹 limpia y pon Olor A y Olor B lejos de ella, en lados opuestos. ¿A cuál va?' },
-    { id: 'carta', titulo: 'Primer encargo', pista: 'Baja a «Ponla a trabajar» y mándale una carta de prueba.', ok: () => bandeja.some((c) => c.estado === 'aceptada' || c.estado === 'descartada') },
-    { id: 'conectada', titulo: 'Conectada', pista: 'Enciende una entrada (ntfy, cripto, clima o GitHub) y que le llegue una carta desde afuera.', ok: () => bandeja.some((c) => ['prueba', 'consola', 'enlace'].indexOf(c.fuente) < 0) },
-    { id: 'obrera', titulo: 'Obrera entrenada', pista: 'Dale 👍 o 👎 a sus cartas hasta que acierte cinco seguidas.', ok: () => marcador.racha >= 5 }
+    { id: 'trabajo', titulo: 'Primer trabajo', pista: 'En «Su pantalla de trabajo», mándale un trabajo de prueba y mira adónde lo lleva.', ok: () => registro.some((e) => e.quien === 'mosca' && e.resultado === 'entregado') },
+    { id: 'ensenar', titulo: 'Enséñale tú', pista: 'En su pantalla, toca un trabajo y después la app adonde va: aprende mirándote.', ok: () => pantalla.stats.porTi >= 1 },
+    { id: 'conectada', titulo: 'Conectada', pista: 'Enciende una entrada (ntfy, cripto, clima o GitHub) y que le llegue un trabajo desde afuera.', ok: () => registro.some((c) => ['prueba', 'consola', 'enlace'].indexOf(c.fuente) < 0) },
+    { id: 'obrera', titulo: 'Obrera entrenada', pista: 'Califica sus trabajos (👍, o 👎 y adónde iba) hasta que acierte cinco seguidos.', ok: () => marcador.racha >= 5 }
   ];
 
   function completar(id) {
@@ -454,7 +634,6 @@
   }
 
   function pintarMisiones() {
-    const ol = $('#misiones');
     let actual = false;
     const filas = MISIONES.map((m) => {
       const li = document.createElement('li');
@@ -473,7 +652,7 @@
       }
       return li;
     });
-    ol.replaceChildren(...filas);
+    $('#misiones').replaceChildren(...filas);
   }
 
   // ================================================================================================ conexiones
@@ -507,6 +686,11 @@
 
   function estadoSalida(id) { alEstado(id, config[id].activo ? 'listo' : 'apagado', config[id].activo ? 'ok' : 'info'); }
 
+  /** En su pantalla, las apps sin salida configurada se ven apagadas. */
+  function pintarApps() {
+    vPantalla.marcarApagadas(Object.keys(SALIDA).filter((app) => !config[SALIDA[app]].activo));
+  }
+
   for (const inp of $$('[data-cfg]')) {
     const [a, b] = inp.dataset.cfg.split('.');
     if (inp.type === 'checkbox') { inp.checked = !!config[a][b]; } else { inp.value = config[a][b] == null ? '' : config[a][b]; }
@@ -520,6 +704,7 @@
         if (a === 'clima' && !config.clima.activo) { quitarClima(); }
         conexiones.fuentes();
       }
+      pintarApps();
       guardar();
     });
   }
@@ -529,6 +714,7 @@
       config.navegador.activo = false;
       inp.checked = false;
       alEstado('navegador', 'este navegador no tiene notificaciones', 'error');
+      pintarApps();
       return;
     }
     Notification.requestPermission().then((p) => {
@@ -536,6 +722,7 @@
         config.navegador.activo = false;
         inp.checked = false;
         alEstado('navegador', 'no diste permiso', 'error');
+        pintarApps();
         guardar();
       }
     });
@@ -563,7 +750,7 @@
       const id = b.dataset.probar;
       if (!config[id].activo) { alEstado(id, 'enciende primero el interruptor', 'error'); return; }
       alEstado(id, 'enviando…', 'info');
-      conexiones.avisar({ titulo: '🪰 Hola desde ' + nombre, texto: 'Si ves esto, la conexión funciona.', olor: 'prueba' }, id);
+      conexiones.enviarA(id, { titulo: '🪰 Hola desde ' + nombre, texto: 'Si ves esto, la conexión funciona.', olor: 'prueba', evento: 'prueba' });
     });
   }
 
@@ -586,7 +773,7 @@
     const servidor = config.ntfyServidor.replace(/^https?:\/\//, '').replace(/\/+$/, '');
     const tin = config.entrada.tema;
     $('#api-cartas').textContent =
-      '# una carta que huele a #ventas\n' +
+      '# un trabajo que huele a #ventas\n' +
       'curl -d "#ventas Llegó un pedido nuevo" ' + servidor + '/' + tin + '\n\n' +
       '# lo mismo, con etiqueta y título\n' +
       'curl -H "Tags: ventas" -H "Title: Pedido 123" \\\n' +
@@ -608,8 +795,47 @@
       '// en la consola de esta página:\n' +
       'MoscaObrera.carta("Hola", "saludos");\n' +
       'MoscaObrera.estimulo("luz");';
-    const abrir = $('#abrir-salida');
-    abrir.href = config.ntfyServidor.replace(/\/+$/, '') + '/' + encodeURIComponent(config.salidaNtfy.tema);
+    $('#abrir-salida').href = config.ntfyServidor.replace(/\/+$/, '') + '/' + encodeURIComponent(config.salidaNtfy.tema);
+  }
+
+  // ================================================================================================ lo que llega de afuera
+  function aplicar(r, origen) {
+    if (!r) { return; }
+    if (r.tipo === 'carta') {
+      pantalla.trabajoNuevo({ texto: r.texto, olor: r.olor, fuente: r.fuente || origen, meta: r.meta || null });
+    } else if (r.tipo === 'feedback') {
+      cerebro.condicionar(r.olor, r.signo, 1.5);
+      aviso((r.signo > 0 ? '👍 ' : '👎 ') + 'Desde ' + origen + ': ' + (r.signo > 0 ? 'le interesa ' : 'no le interesa ') + '#' + r.olor);
+    } else if (r.tipo === 'estimulo') {
+      estimular(r.estimulo, r.fuerza, origen);
+    }
+  }
+
+  function lugarCerca(min, max) {
+    const m = mundo.mosca;
+    for (let i = 0; i < 30; i += 1) {
+      const a = Math.random() * Math.PI * 2;
+      const d = min + Math.random() * (max - min);
+      const x = m.x + Math.cos(a) * d;
+      const y = m.y + Math.sin(a) * d;
+      if (x > 40 && x < mundo.W - 40 && y > 40 && y < mundo.H - 40) { return { x, y }; }
+    }
+    return { x: mundo.W / 2, y: mundo.H / 2 };
+  }
+
+  function estimular(e, fuerza, origen) {
+    const m = mundo.mosca;
+    if (e === 'premio') { mundo.premio(); } else if (e === 'castigo') { mundo.castigo(); } else if (e === 'limpiar') { mundo.limpiar(); } else if (e === 'viento') {
+      const a = Math.random() * Math.PI * 2;
+      mundo.vientoDesde(mundo.W / 2 + Math.cos(a) * mundo.W, mundo.H / 2 + Math.sin(a) * mundo.H, 0.4 + 0.6 * (fuerza == null ? 1 : fuerza));
+    } else if (e === 'amenaza') {
+      const a = Math.random() * Math.PI * 2;
+      mundo.agregar('amenaza', m.x + Math.cos(a) * 90, m.y + Math.sin(a) * 90);
+    } else {
+      const p = lugarCerca(160, 320);
+      mundo.agregar(e, p.x, p.y);
+    }
+    if (origen) { aviso('📨 Desde ' + origen + ': ' + e + (activo === mundo ? '' : ' (en el laboratorio)')); }
   }
 
   // ================================================================================================ memoria
@@ -643,6 +869,7 @@
         d.config.discord.url = d.config.discord.url || actual.config.discord.url;
         d.config.webhook.url = d.config.webhook.url || actual.config.webhook.url;
       }
+      window.removeEventListener('pagehide', guardar);
       escribir(d);
       location.reload();
     }).catch((e) => aviso('No pude cargarla: ' + e.message, 4000));
@@ -666,15 +893,17 @@
   function leerHash() {
     if (!location.hash || location.hash.indexOf('=') < 0) { return; }
     const q = new URLSearchParams(location.hash.slice(1));
+    let ir = '#jugar';
     if (q.has('carta')) {
       aplicar({ tipo: 'carta', texto: q.get('carta'), olor: normalizarOlor(q.get('olor') || 'enlace'), fuente: 'enlace' }, 'enlace');
+      ir = '#oficina';
     } else if (q.has('estimulo')) {
       const e = Conexiones.ESTIMULOS[normalizarOlor(q.get('estimulo'))];
       if (e) { aplicar({ tipo: 'estimulo', estimulo: e, fuerza: 1 }, 'enlace'); }
     } else {
       return;
     }
-    history.replaceState(null, '', location.pathname + location.search + '#jugar');
+    history.replaceState(null, '', location.pathname + location.search + ir);
   }
   window.addEventListener('hashchange', leerHash);
 
@@ -693,28 +922,38 @@
       return true;
     },
     ensenar: (olor, signo) => cerebro.condicionar(olor, signo >= 0 ? 1 : -1, 1.5),
-    estado: () => ({ nombre, accion: cerebro.accion(), interno: Object.assign({}, cerebro.interno), sueno: cerebro.sueno,
-      stats: Object.assign({}, mundo.stats), marcador: Object.assign({}, marcador), misiones: Array.from(hechas) }),
+    /** «Esto va ahí»: enseñarle una ruta sin esperar a que llegue un trabajo. */
+    ruta: (olor, app) => cerebro.condicionarMezcla(normalizarOlor(olor), 'app-' + app, 1, 1.5),
+    trabajar: () => mudarA('pantalla'),
+    laboratorio: () => mudarA('lab'),
+    estado: () => ({ nombre, lugar: activo === pantalla ? 'pantalla' : 'lab', accion: cerebro.accion(),
+      interno: Object.assign({}, cerebro.interno), sueno: cerebro.sueno, stats: Object.assign({}, mundo.stats),
+      pantalla: Object.assign({}, pantalla.stats), marcador: Object.assign({}, marcador), misiones: Array.from(hechas) }),
     velocidad: (v) => { velocidad = Math.max(0, Math.min(20, Number(v) || 0)); },
     cerebro,
-    mundo
+    mundo,
+    pantalla
   };
 
   // ================================================================================================ arranque
   for (const n of $$('.n-neuronas')) { n.textContent = String(Cerebro.TOTAL_NEURONAS); }
-  // Las cartas que estaban en la arena cuando se cerró la página vuelven a llegar (el trabajo no se pierde).
-  const pendientes = bandeja.filter((e) => e.estado === 'arena' || e.estado === 'cola').reverse();
-  for (const e of pendientes) { mundo.cartaNueva({ id: e.id, texto: e.texto, olor: e.olor, fuente: e.fuente, reentrega: true }); }
+  // Lo que quedó pendiente cuando se cerró la página vuelve a su pantalla (el trabajo no se pierde).
+  const turnoGuardado = turnoAuto;
+  turnoAuto = false;
+  for (const t of (guardado.pendientes || [])) { pantalla.trabajoNuevo(Object.assign({}, t, { reentrega: true })); }
+  turnoAuto = turnoGuardado;
+  pintarLugar();
   pintarEstado();
   pintarAprendido();
   pintarMisiones();
-  pintarBandeja();
+  pintarRegistro();
   pintarApi();
+  pintarApps();
   for (const id of ['salidaNtfy', 'discord', 'webhook', 'navegador']) { estadoSalida(id); }
   conexiones.escuchar();
   conexiones.fuentes();
   leerHash();
-  if (!guardado) { setTimeout(() => aviso('👇 Elige una herramienta abajo y toca la arena', 4000), 800); }
+  if (!guardado.cerebro) { setTimeout(() => aviso('👇 Elige una herramienta abajo y toca la arena', 4000), 800); }
   if ('serviceWorker' in navigator && /^https:|^http:\/\/(localhost|127\.)/.test(location.href)) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }

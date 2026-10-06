@@ -1,6 +1,6 @@
 # 🪰 Mosca Obrera
 
-Un cerebro de mosca de la fruta (*Drosophila melanogaster*) que vive en tu navegador. Puedes jugar con ella, enseñarle con premios y castigos y conectarla a tus apps para que trabaje para ti: huele los mensajes que le llegan, decide cuáles valen la pena y te los reenvía.
+Un cerebro de mosca de la fruta (*Drosophila melanogaster*) que vive en tu navegador. Juegas con ella en el laboratorio y después le das su propia **pantalla de trabajo**: una pantalla dentro de tu pantalla, donde le llegan los mensajes de tus apps. Los toca con la trompa, los lleva a la app que corresponde y aprende de ti qué va dónde.
 
 **En vivo:** https://pepenandosanchezcortes2012-hash.github.io/mosca-obrera/
 
@@ -26,15 +26,22 @@ No es el conectoma completo (FlyWire, 2024: ~140 000 neuronas). Es una miniatura
 
 Elige una herramienta (fruta, olor A, olor B, humo, luz, calor, mano, viento) y toca la arena. **Premio** 🍬 y **Castigo** ⚡ asocian lo que la mosca huele en ese momento con algo bueno o malo. Las misiones van del primer bocado al examen en el laberinto.
 
-## Ponerla a trabajar
+## Su pantalla de trabajo («Mosca OS»)
 
-1. **Lo que le llega**: el canal de entrada de [ntfy](https://ntfy.sh), el mercado cripto (CoinGecko), el clima de tu ciudad (Open-Meteo) o un repo de GitHub. Cada mensaje llega como una **carta** que huele a su `#etiqueta`.
-2. **La mosca decide**: si el olor le gusta (lo innato + lo aprendido), va y la recoge; si no, la deja.
-3. **A quién le avisa**: tu celular (app ntfy), Discord, un webhook (n8n, Make, Zapier…) o las notificaciones del navegador.
-4. **Tú le enseñas**: 👍 / 👎 en cada carta. Es la misma dopamina que usa para la comida.
+Arriba le llegan los **trabajos** (cada uno huele a su `#etiqueta`); abajo están sus **apps**: 📱 Celular (ntfy), 💬 Discord, 🔗 Webhook, 🔔 Avisos del navegador, 🗂️ Archivo y 🗑️ Papelera.
+
+- **El toque es de verdad:** la mosca camina sobre la pantalla y cuando extiende la trompa hace clic en el botón que tiene debajo, el mismo que tocas tú.
+- **Decide con su cuerpo fungiforme:** valora la mezcla «lo que llevo + adónde voy». Las salidas se inhiben entre sí, así que la mejor opción apaga a las demás.
+- **Sin enseñarle nada, archiva:** no le escribe a nadie por su cuenta.
+- **Le enseñas de tres formas:** 👍 (le pagas con azúcar), 👎 + «adónde iba» (lo reenvía ahí y aprende), o tocando tú un trabajo y luego una app (aprende mirándote). Lo que ya no le interesa lo ignora y se va a la papelera.
+- **Ventana flotante:** en Chrome o Edge de escritorio, su pantalla sale a una ventana que queda encima de todo mientras usas la compu.
+
+## Conectarla
+
+Los trabajos le llegan por el canal de entrada de [ntfy](https://ntfy.sh) (cualquier app que haga un POST), del mercado cripto (CoinGecko), del clima de tu ciudad (Open-Meteo) o de un repo de GitHub. Cada app de su pantalla sale de verdad por su conexión.
 
 ```sh
-# una carta que huele a #ventas
+# un trabajo que huele a #ventas
 curl -d "#ventas Llegó un pedido nuevo" ntfy.sh/<tu-canal-de-entrada>
 
 # estímulos y enseñanza
@@ -42,17 +49,17 @@ curl -d "fruta" ntfy.sh/<tu-canal-de-entrada>
 curl -d "premio ventas" ntfy.sh/<tu-canal-de-entrada>
 ```
 
-También entiende enlaces (`#carta=Hola&olor=saludos`, `#estimulo=luz`), `postMessage` si la metes en un iframe y `MoscaObrera` en la consola.
+También entiende enlaces (`#carta=Hola&olor=saludos`, `#estimulo=luz`), `postMessage` si la metes en un iframe y `MoscaObrera` en la consola (`MoscaObrera.ruta('ventas', 'celular')` le enseña una ruta).
 
 Trabaja mientras la página esté abierta. Lo que aprende se guarda en el dispositivo (localStorage) y se puede pasar a otro con «Guardar su memoria en un archivo».
 
 ## Desarrollo
 
-Sin dependencias ni compilación: HTML, CSS y JavaScript. El cerebro (`js/cerebro.js`), la arena (`js/mundo.js`) y los mensajes (`js/conexiones.js`) también corren en Node.
+Sin dependencias ni compilación: HTML, CSS y JavaScript. El cerebro (`js/cerebro.js`), la arena (`js/mundo.js`), la pantalla de trabajo (`js/pantalla.js`) y los mensajes (`js/conexiones.js`) también corren en Node.
 
 ```sh
-node --test tests/mosca.test.js         # comportamiento: comer, huir, aprender, examen en T, cartas…
-py herramientas/probar.py               # la página en Chrome sin ventana, con capturas de celular y escritorio
+node --test tests/mosca.test.js         # comportamiento: comer, huir, aprender, examen en T, la pantalla de trabajo…
+py herramientas/probar.py               # la página en Chrome sin ventana (toques reales, 👎, enseñarle) con capturas
 py herramientas/probar.py --red         # además: ntfy de ida y vuelta, CoinGecko, Open-Meteo y GitHub de verdad
 ```
 

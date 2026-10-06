@@ -3,31 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Mosca Obrera · un cerebro de mosca que trabaja para ti</title>
-<meta name="description" content="Un cerebro de mosca de la fruta (Drosophila) simulado en tu navegador: juega con él, enséñale con premios y castigos, y conéctalo a tus apps para que huela tus mensajes y te reenvíe los que importan.">
+<title>Mosca Obrera · una mosca de la fruta, viva en tu navegador</title>
+<meta name="description" content="Un cerebro de mosca de la fruta (Drosophila) simulado neurona por neurona en tu navegador: huele, aprende con premios y castigos, huye del peligro y duerme de noche. Juega con ella y mira su cerebro pensar en vivo.">
 <meta name="theme-color" content="#0b0f14">
 <meta property="og:title" content="Mosca Obrera">
-<meta property="og:description" content="Un cerebro de mosca de la fruta, vivo en tu navegador, que aprende y trabaja para ti.">
+<meta property="og:description" content="Un cerebro de mosca de la fruta, vivo en tu navegador. Juega con ella y míralo pensar.">
 <meta property="og:type" content="website">
 <link rel="icon" href="icono.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icono-192.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Mosca OS">
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="estilo.css?v=7">
+<link rel="stylesheet" href="estilo.css?v=8">
 </head>
 <body>
 <header class="barra">
   <a class="marca" href="#inicio"><span class="logo" aria-hidden="true">🪰</span> Mosca Obrera</a>
   <nav aria-label="Secciones">
     <a href="#jugar">Jugar</a>
-    <a href="#oficina">Trabajo</a>
-    <a href="#trabajo">Conectar</a>
     <a href="#ciencia">Ciencia</a>
   </nav>
 </header>
@@ -36,11 +30,11 @@
   <section class="hero" id="inicio">
     <div class="hero-texto">
       <p class="ceja">Drosophila melanogaster · <span class="n-neuronas">283</span> neuronas vivas en tu navegador</p>
-      <h1>Un cerebro de mosca <em>que trabaja para ti</em></h1>
-      <p class="entrada">Juega con ella en el laboratorio y después dale su propio sistema: Mosca OS, con su pantalla de trabajo y una terminal tipo Linux que vive en tu celular. Le llegan los mensajes de tus apps, los toca con la trompa, los lleva a donde corresponde y aprende de ti qué va dónde.</p>
+      <h1>Una mosca de la fruta <em>que de verdad piensa</em></h1>
+      <p class="entrada">Su cerebro está simulado neurona por neurona, conectado como en la mosca real. Huele por el aire, aprende de lo que le pasa, huye de lo que la asusta y duerme de noche. Juega con ella y mira su cerebro pensar en vivo.</p>
       <div class="cta">
         <a class="boton primario" href="#jugar">Despertar a la mosca</a>
-        <a class="boton" href="#oficina">Ponla a trabajar</a>
+        <a class="boton" href="#ciencia">¿Cómo funciona?</a>
       </div>
     </div>
     <ul class="cifras">
@@ -71,7 +65,6 @@
         </div>
         <div class="arena-marco" id="arena-marco">
           <canvas id="arena" aria-label="Arena con la mosca. Toca para poner lo que elegiste."></canvas>
-          <div class="aviso-arena-fuera" id="arena-fuera" hidden><p>💼 La mosca está trabajando en su pantalla.</p><button class="chico primario" type="button" data-mudar="lab">🧪 Traerla al laboratorio</button></div>
           <div id="aviso" class="aviso" role="status" aria-live="polite"></div>
         </div>
         <div class="herramientas" role="toolbar" aria-label="Herramientas">
@@ -118,147 +111,8 @@
         <ol id="misiones" class="misiones"></ol>
       </div>
     </div>
-  </section>
-
-  <section id="oficina" class="seccion">
-    <div class="titulo-seccion">
-      <h2>Mosca OS: su pantalla y su terminal</h2>
-      <p>Una pantalla dentro de tu pantalla, con una terminal como la de Termux debajo. Arriba le llegan los trabajos (lo que mandan tus apps, cada uno con su <code>#etiqueta</code>); abajo están sus apps. La mosca camina encima, agarra un trabajo con la trompa y lo lleva a la app que cree que corresponde. Si nadie le enseñó, lo archiva. Le enseñas corrigiéndola, o tocando tú un trabajo y luego una app: aprende mirándote. En la terminal sus trabajos son archivos (<code>~/bandeja</code>), sus apps son dispositivos (<code>/apps</code>) y su cerebro está en <code>/proc/mosca</code>.</p>
-    </div>
-    <button class="chico salir-os" id="salir-os" type="button" aria-label="Salir del modo app">✕</button>
-    <div class="oficina">
-      <div class="oficina-col">
-        <div class="lugar">
-          <span id="donde" class="donde">🧪 Está en el laboratorio</span>
-          <button class="chico primario" id="mudar" type="button">💼 Llevarla a trabajar</button>
-        </div>
-        <div class="dispositivo" id="dispositivo">
-          <div class="pantalla-os">
-            <div class="barra-os"><span>🪰 Mosca OS</span><span id="os-estado">🧪 fuera</span><span id="os-bateria" title="Energía: lo contrario del hambre">🔋 –</span><span id="os-hora">–</span></div>
-            <div class="zona" id="zona">
-              <canvas id="capa-mosca" aria-hidden="true"></canvas>
-              <p class="os-vacia" id="os-vacia">Sin trabajos por ahora</p>
-              <div class="os-ausente" id="os-ausente"><p>La mosca está en el laboratorio.</p><button class="chico primario" type="button" data-mudar="pantalla">💼 Traerla a trabajar</button></div>
-            </div>
-          </div>
-        </div>
-        <form id="form-copiloto" class="copiloto">
-          <span class="copiloto-icono" aria-hidden="true">🤖</span>
-          <input id="copiloto-texto" placeholder="Dile en español: «manda hola a discord», «cuánta batería»…" aria-label="Dile al copiloto qué hacer" autocomplete="off">
-          <button class="chico primario" type="submit">Hazlo</button>
-        </form>
-        <div class="copiloto-ejemplos">
-          <button type="button" class="chip" data-copiloto="cuánta batería tengo">batería</button>
-          <button type="button" class="chip" data-copiloto="dónde estoy">ubicación</button>
-          <button type="button" class="chip" data-copiloto="manda hola a discord">manda a discord</button>
-          <button type="button" class="chip" data-copiloto="cada mañana mándame el precio de bitcoin">precio BTC cada día</button>
-          <button type="button" class="chip" data-copiloto="qué tengo pendiente">qué hay pendiente</button>
-        </div>
-        <div class="terminal" id="terminal">
-          <div class="term-barra"><span>⌨️ termosca · mosh</span><span>ayuda · neofetch · top</span></div>
-          <div class="term-salida" role="log" aria-label="Salida de la terminal"></div>
-          <form class="term-linea" autocomplete="off"><span class="term-prompt"></span><input class="term-input" aria-label="Comando de la terminal" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send"></form>
-          <div class="term-teclas" aria-label="Teclas extra">
-            <button type="button" data-tecla="esc">ESC</button><button type="button" data-tecla="tab">TAB</button><button type="button" data-tecla="ctrl-c">^C</button><button type="button" data-tecla="arriba" aria-label="Anterior">↑</button><button type="button" data-tecla="abajo" aria-label="Siguiente">↓</button><button type="button" data-tecla="|">|</button><button type="button" data-tecla="/">/</button><button type="button" data-tecla="-">-</button><button type="button" data-tecla="~">~</button><button type="button" data-tecla="&gt;">&gt;</button>
-          </div>
-        </div>
-        <form id="form-prueba" class="fila mandar">
-          <input id="texto-prueba" aria-label="Texto del trabajo de prueba" value="#ventas Llegó un pedido nuevo">
-          <button class="chico primario" type="submit">Mandarle un trabajo</button>
-        </form>
-        <div class="fila opciones-oficina">
-          <button class="chico primario" id="modo-app" type="button">📱 Modo app (pantalla completa)</button>
-          <button class="chico" id="instalar" type="button" hidden>⬇️ Instalar Mosca OS</button>
-          <button class="chico" id="flotante" type="button">📺 Ventana flotante</button>
-          <label class="regla"><input type="checkbox" id="turno-auto"> Que vaya sola a trabajar cuando llegue algo</label>
-        </div>
-        <p class="ayuda" id="ayuda-flotante">La ventana flotante queda encima de todo mientras usas la compu (Chrome o Edge de escritorio). En el celular, instálala como app: en Android, «Instalar Mosca OS» (o el menú ⋮ → Instalar app); en iPhone, Compartir → Agregar a inicio. Funciona sin internet y todo se guarda en tu celular.</p>
-      </div>
-      <div class="panel registro-panel">
-        <h3>Trabajos hechos</h3>
-        <div class="marcador">
-          <span><b id="r-hechos">0</b> hechos</span>
-          <span><b id="r-aciertos">–</b> aciertos</span>
-          <span><b id="r-racha">0</b> racha</span>
-          <span><b id="r-sueldo">0</b> 🍬 sueldo</span>
-        </div>
-        <p class="ayuda">👍 si lo llevó bien (le pagas con azúcar). 👎 y le dices adónde iba: lo reenvía ahí y aprende para la próxima.</p>
-        <ul id="registro" class="registro"></ul>
-        <p id="registro-vacio" class="vacia">Todavía no hizo ningún trabajo. Mándale uno de prueba.</p>
-      </div>
-    </div>
-  </section>
-
-  <section id="trabajo" class="seccion">
-    <div class="titulo-seccion">
-      <h2>Conéctala</h2>
-      <p>Lo que le llega a su pantalla sale de tus apps, y cada app de su pantalla manda las cosas a algún lado de verdad. Todo corre en tu navegador: no hay servidor.</p>
-    </div>
-    <div class="flujo" aria-hidden="true">
-      <span class="nodo">📡 tus apps</span><span class="flecha">→</span>
-      <span class="nodo">✉️ trabajo #etiqueta</span><span class="flecha">→</span>
-      <span class="nodo mosca-nodo">🪰 lo lleva en su pantalla</span><span class="flecha">→</span>
-      <span class="nodo">📱 💬 🔗 🔔</span>
-    </div>
-    <div class="trabajo-grid">
-      <div class="panel">
-        <h3><span class="paso">1</span> Lo que le llega</h3>
-        <div class="conexion" data-con="entrada">
-          <div class="con-cabeza"><label class="interruptor"><input type="checkbox" data-cfg="entrada.activo"><span></span></label><b>Canal de entrada</b> <span class="etiqueta">ntfy</span></div>
-          <p class="ayuda">Cualquier app que pueda hacer un POST le escribe aquí: curl, n8n, Zapier, IFTTT, Atajos de iPhone…</p>
-          <div class="fila"><input data-cfg="entrada.tema" class="mono" aria-label="Canal de entrada" spellcheck="false"><button class="chico" data-copiar="entrada">Copiar</button><button class="chico" data-nuevo-tema="entrada" title="Otro nombre al azar">↻</button></div>
-          <p class="estado" data-estado="entrada">apagado</p>
-        </div>
-        <div class="conexion" data-con="cripto">
-          <div class="con-cabeza"><label class="interruptor"><input type="checkbox" data-cfg="cripto.activo"><span></span></label><b>Mercado cripto</b> <span class="etiqueta">CoinGecko</span></div>
-          <p class="ayuda">Si una moneda se mueve más del umbral desde el último aviso, llega un trabajo <code>#bitcoin-sube</code> o <code>#bitcoin-baja</code>.</p>
-          <div class="fila"><input data-cfg="cripto.monedas" aria-label="Monedas (ids de CoinGecko)" placeholder="bitcoin, ethereum" spellcheck="false"><label class="umbral"><input data-cfg="cripto.umbral" type="number" min="0.1" step="0.1" aria-label="Umbral en por ciento"> %</label></div>
-          <p class="estado" data-estado="cripto">apagado</p>
-        </div>
-        <div class="conexion" data-con="clima">
-          <div class="con-cabeza"><label class="interruptor"><input type="checkbox" data-cfg="clima.activo"><span></span></label><b>Clima de tu ciudad</b> <span class="etiqueta">Open-Meteo</span></div>
-          <p class="ayuda">El viento real sopla en la arena del laboratorio. Si empieza a llover, llega un trabajo <code>#lluvia</code>.</p>
-          <form id="form-ciudad" class="fila"><input id="ciudad" placeholder="Bogotá, Lima, Madrid…" aria-label="Ciudad"><button class="chico" type="submit">Buscar</button></form>
-          <p class="estado" data-estado="clima">apagado</p>
-        </div>
-        <div class="conexion" data-con="github">
-          <div class="con-cabeza"><label class="interruptor"><input type="checkbox" data-cfg="github.activo"><span></span></label><b>Repo de GitHub</b></div>
-          <p class="ayuda">Estrellas, pushes, issues y PRs nuevos llegan como trabajos (<code>#github-estrella</code>, <code>#github-push</code>…).</p>
-          <div class="fila"><input data-cfg="github.repo" placeholder="usuario/repo" aria-label="Repositorio" spellcheck="false"></div>
-          <p class="estado" data-estado="github">apagado</p>
-        </div>
-      </div>
-
-      <div class="panel">
-        <h3><span class="paso">2</span> Las apps de su pantalla</h3>
-        <div class="conexion" data-con="salidaNtfy">
-          <div class="con-cabeza"><label class="interruptor"><input type="checkbox" data-cfg="salidaNtfy.activo"><span></span></label><b>📱 Celular</b> <span class="etiqueta">ntfy</span></div>
-          <p class="ayuda">Instala la app <a href="https://ntfy.sh/" target="_blank" rel="noopener">ntfy</a> (Android o iPhone) y suscríbete a este canal. Lo que la mosca lleve a 📱 te llega como notificación.</p>
-          <div class="fila"><input data-cfg="salidaNtfy.tema" class="mono" aria-label="Canal de salida" spellcheck="false"><button class="chico" data-copiar="salidaNtfy">Copiar</button><a class="chico boton" id="abrir-salida" target="_blank" rel="noopener">Abrir</a></div>
-          <div class="fila"><button class="chico" data-probar="salidaNtfy">Probar</button><p class="estado" data-estado="salidaNtfy">apagado</p></div>
-        </div>
-        <div class="conexion" data-con="discord">
-          <div class="con-cabeza"><label class="interruptor"><input type="checkbox" data-cfg="discord.activo"><span></span></label><b>💬 Discord</b></div>
-          <p class="ayuda">En tu servidor: Ajustes del canal → Integraciones → Webhooks → Copiar URL.</p>
-          <div class="fila"><input data-cfg="discord.url" type="url" placeholder="https://discord.com/api/webhooks/…" aria-label="Webhook de Discord" spellcheck="false"><button class="chico" data-probar="discord">Probar</button></div>
-          <p class="estado" data-estado="discord">apagado</p>
-        </div>
-        <div class="conexion" data-con="webhook">
-          <div class="con-cabeza"><label class="interruptor"><input type="checkbox" data-cfg="webhook.activo"><span></span></label><b>🔗 Webhook</b> <span class="etiqueta">n8n · Make · Zapier</span></div>
-          <p class="ayuda">Recibe un JSON con el trabajo, su olor y cuánto le gustaba la ruta a la mosca. Desde ahí, a donde quieras: Sheets, correo, Telegram…</p>
-          <div class="fila"><input data-cfg="webhook.url" type="url" placeholder="https://…" aria-label="URL del webhook" spellcheck="false"><button class="chico" data-probar="webhook">Probar</button></div>
-          <p class="estado" data-estado="webhook">apagado</p>
-        </div>
-        <div class="conexion" data-con="navegador">
-          <div class="con-cabeza"><label class="interruptor"><input type="checkbox" data-cfg="navegador.activo"><span></span></label><b>🔔 Avisos de este navegador</b></div>
-          <div class="fila"><button class="chico" data-probar="navegador">Probar</button><p class="estado" data-estado="navegador">apagado</p></div>
-        </div>
-        <p class="ayuda">🗂️ Archivo y 🗑️ Papelera no mandan nada: quedan en el registro. Si lleva algo a una app sin conectar, se queda en el archivo.</p>
-      </div>
-    </div>
     <div class="aviso-trabajo">
-      <p><b>¿Cuándo trabaja?</b> Mientras esta página esté abierta. En la compu sigue aunque la pestaña quede atrás, y con la ventana flotante la ves trabajar encima de todo; en el celular, con la pantalla encendida. Lo que aprendió se guarda en este dispositivo.</p>
-      <p><b>Privacidad:</b> los canales de ntfy.sh son públicos para quien sepa su nombre (por eso son al azar). No le mandes contraseñas. Las direcciones de Discord y de los webhooks se quedan solo en este navegador.</p>
+      <p><b>Todo vive aquí.</b> La mosca y lo que aprende se guardan en este dispositivo, sin servidores. Puedes guardar su memoria en un archivo y cargarla en otro lado.</p>
       <div class="fila memoria-fila">
         <button class="chico" id="exportar">Guardar su memoria en un archivo</button>
         <label class="chico boton">Cargar memoria<input type="file" id="importar" accept="application/json,.json" hidden></label>
@@ -273,7 +127,7 @@
       <p>En 2024 el consorcio FlyWire publicó el mapa completo del cerebro de una mosca de la fruta adulta: unas 140 000 neuronas y 50 millones de sinapsis. Esta mosca es una miniatura de ese cerebro. Tiene menos neuronas, pero están conectadas igual en los circuitos que mejor se conocen.</p>
     </div>
     <div class="ciencia-grid">
-      <article class="tarjeta"><h3>👃 Olfato</h3><p>Cada olor enciende un patrón en el lóbulo antenal. El <b>cuerno lateral</b> trae lo innato (la fruta atrae, el humo repele) y el <b>cuerpo fungiforme</b> aprende todo lo demás. Cualquier palabra puede ser un olor: así huele tus mensajes.</p></article>
+      <article class="tarjeta"><h3>👃 Olfato</h3><p>Cada olor enciende un patrón en el lóbulo antenal. El <b>cuerno lateral</b> trae lo innato (la fruta atrae, el humo repele) y el <b>cuerpo fungiforme</b> aprende todo lo demás, asociando cada olor con lo bueno o lo malo que vino con él.</p></article>
       <article class="tarjeta"><h3>🧠 Memoria</h3><p>De 200 células de Kenyon, la neurona <b>APL</b> deja encendido solo el 5 %. Cuando llega <b>dopamina</b> se debilitan las sinapsis de esas células: con recompensa (PAM), las que llevan a «evitar»; con castigo (PPL1), las que llevan a «acercarse». Hay tres compartimentos que olvidan a ritmos distintos.</p></article>
       <article class="tarjeta"><h3>🧭 Brújula</h3><p>En el <b>complejo central</b>, un anillo de neuronas E-PG mantiene una burbuja de actividad que apunta hacia lo más atractivo. Es un <i>atractor de anillo</i>, igual al que se ve en el microscopio en moscas vivas.</p></article>
       <article class="tarjeta"><h3>⚡ Acción</h3><p>Seis <b>neuronas descendentes</b> compiten entre sí: explorar, acercarse, comer, huir, acicalarse y descansar. Gana una. Si algo se acerca rápido (looming), la huida le gana a todo, como pasa con la fibra gigante.</p></article>
@@ -295,46 +149,6 @@
     </div>
     <p class="nota">Lo que <b>no</b> es: no es el conectoma completo, ni neuronas con espigas, ni una mosca consciente. Son neuronas de tasa (un número de actividad cada 0,1 s), y la regla de aprendizaje es la depresión de las sinapsis Kenyon→MBON por dopamina que se mide en la mosca, simplificada.</p>
   </section>
-
-  <section id="api" class="seccion">
-    <div class="titulo-seccion">
-      <h2>Háblale desde cualquier app</h2>
-      <p>No hace falta cuenta ni clave. Cualquier programa que mande un mensaje a <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy.sh</a> le llega a su pantalla como trabajo (enciende primero el <a href="#trabajo">canal de entrada</a>).</p>
-    </div>
-    <div class="api-grid">
-      <div class="panel">
-        <h3>Mandarle trabajos</h3>
-        <pre class="codigo"><code id="api-cartas"></code></pre>
-        <p class="ayuda">El olor sale del <code>#hashtag</code>, de la cabecera <code>Tags</code> o del título. Mismo olor, mismo destino: así aprende adónde va cada tema.</p>
-      </div>
-      <div class="panel">
-        <h3>Estímulos y enseñanza</h3>
-        <pre class="codigo"><code id="api-estimulos"></code></pre>
-        <p class="ayuda">Palabras que entiende: fruta, menta, canela, humo, luz, calor, mano, viento, premio, castigo, limpiar.</p>
-      </div>
-      <div class="panel">
-        <h3>Lo que manda tu webhook</h3>
-        <pre class="codigo"><code>{
-  "fuente": "mosca-obrera",
-  "mosca": "Mosca #4821",
-  "evento": "entregado",
-  "titulo": "🪰 Mosca #4821 te manda #ventas",
-  "texto": "Llegó un pedido nuevo",
-  "olor": "ventas",
-  "app": "webhook",
-  "quien": "mosca",
-  "valencia": 0.31,
-  "trabajo": { "texto": "…", "olor": "ventas", "fuente": "ntfy" },
-  "hora": "2026-10-05T18:20:00.000Z"
-}</code></pre>
-      </div>
-      <div class="panel">
-        <h3>Desde un enlace o una página</h3>
-        <pre class="codigo"><code id="api-enlace"></code></pre>
-        <p class="ayuda">Si la metes en un <code>&lt;iframe&gt;</code>, también escucha <code>postMessage</code>. En la consola del navegador tienes <code>MoscaObrera</code>.</p>
-      </div>
-    </div>
-  </section>
 </main>
 
 <footer class="pie">
@@ -344,13 +158,8 @@
 
 <noscript><p class="sin-js">La mosca necesita JavaScript para vivir.</p></noscript>
 <script src="js/cerebro.js?v=2"></script>
-<script src="js/mundo.js?v=2"></script>
-<script src="js/pantalla.js?v=3"></script>
-<script src="js/sistema.js?v=4"></script>
-<script src="js/copiloto.js?v=2"></script>
-<script src="js/vista.js?v=5"></script>
-<script src="js/terminal.js?v=2"></script>
-<script src="js/conexiones.js?v=2"></script>
-<script src="js/app.js?v=4"></script>
+<script src="js/mundo.js?v=3"></script>
+<script src="js/vista.js?v=6"></script>
+<script src="js/app.js?v=5"></script>
 </body>
 </html>

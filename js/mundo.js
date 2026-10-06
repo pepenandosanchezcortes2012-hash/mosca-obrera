@@ -3,7 +3,7 @@
  *
  * Arma lo que sienten sus antenas, ojos, patas y boca a partir de las cosas que hay en la arena (fruta, olores, luz,
  * calor, una mano que se acerca), se lo pasa al cerebro y mueve el cuerpo según la neurona descendente que ganó.
- * La pantalla de trabajo (pantalla.js) es otro mundo hecho con la misma física. No dibuja nada: eso lo hace vista.js.
+ * No dibuja nada: eso lo hace vista.js.
  * Funciona en Node para las pruebas.
  */
 (function (raiz, fabrica) {
@@ -46,7 +46,7 @@
       this.modoReloj = op.modoReloj || 'acelerado';
       this.diaSeg = op.diaSeg || 480;
       this.horaInicio = op.horaInicio == null ? 0.35 : op.horaInicio;
-      this.stats = { comidas: 0, huidas: 0, toques: 0, premios: 0, castigos: 0, eligioMenta: 0 };
+      this.stats = { comidas: 0, huidas: 0, toques: 0, premios: 0, castigos: 0, eligioMenta: 0, durmio: 0, aseo: 0 };
       /** La mosca está en un solo lugar: solo el mundo activo avanza y repite lo que hace su cerebro. */
       this.activo = true;
       this.oyentes = [];
@@ -289,6 +289,9 @@
       } else if (accion !== 'comer') {
         this._comiendo = false;
       }
+      // Cuánto tiempo lleva durmiendo o acicalándose (para las misiones de vida).
+      if (accion === 'descansar' && this.cerebro.sueno > 0.5) { this.stats.durmio += dt; }
+      if (accion === 'acicalarse') { this.stats.aseo += dt; }
       this._visitas();
     }
 

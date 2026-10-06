@@ -1,13 +1,12 @@
 {
-  "name": "Mosca OS",
-  "short_name": "Mosca OS",
-  "description": "Un cerebro de mosca de la fruta con su propia pantalla de trabajo y una terminal tipo Linux, local en tu celular.",
+  "name": "Mosca Obrera",
+  "short_name": "Mosca",
+  "description": "Una mosca de la fruta simulada neurona por neurona: huele, aprende y duerme. Juega con ella y mira su cerebro pensar.",
   "lang": "es",
-  "start_url": "./?app=1",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "orientation": "any",
-  "background_color": "#000000",
+  "background_color": "#0b0f14",
   "theme_color": "#0b0f14",
   "icons": [
     { "src": "icono-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },

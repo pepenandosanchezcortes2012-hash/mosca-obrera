@@ -263,6 +263,11 @@ input:focus, select:focus, button:focus-visible, a:focus-visible { outline: 2px 
 .sin-js { text-align: center; padding: 20px; }
 
 /* ------------------------------------------------------------------ pantallas grandes */
+@media (max-width: 420px) {
+  .barra { padding-left: 12px; padding-right: 8px; gap: 6px; }
+  .barra nav { gap: 0; }
+  .barra nav a { padding: 6px 6px; font-size: 0.86rem; }
+}
 @media (min-width: 720px) {
   .hero { grid-template-columns: 1.4fr 1fr; align-items: center; padding-top: 80px; }
   .arena-marco { aspect-ratio: 4 / 3; }

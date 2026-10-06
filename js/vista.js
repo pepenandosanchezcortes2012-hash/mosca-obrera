@@ -226,14 +226,16 @@
       ctx.font = '600 13px system-ui, sans-serif';
       const txt = EMOJI_ACCION[accion] + ' ' + TEXTO_ACCION[accion];
       const w = ctx.measureText(txt).width + 14;
-      const y = m.y - 40 - m.alto * 10;
+      // Que no se salga de la arena cuando la mosca está pegada a una pared.
+      const x = Math.min(mu.W - w / 2 - 4, Math.max(w / 2 + 4, m.x));
+      const y = m.y - 40 - m.alto * 10 < 16 ? m.y + 40 : m.y - 40 - m.alto * 10;
       ctx.fillStyle = 'rgba(10, 14, 20, 0.72)';
-      redondeado(ctx, m.x - w / 2, y - 11, w, 22, 11);
+      redondeado(ctx, x - w / 2, y - 11, w, 22, 11);
       ctx.fill();
       ctx.fillStyle = accion === 'huir' ? '#ff8a8a' : '#e7edf3';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(txt, m.x, y + 1);
+      ctx.fillText(txt, x, y + 1);
       ctx.restore();
     }
 

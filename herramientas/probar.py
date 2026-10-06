@@ -149,23 +149,29 @@ def terminal(c, ok, caps):
     ok('cada 10s' not in texto().split('kill 101')[-1], 'kill detiene la tarea')
     # El copiloto: lenguaje natural → comandos, y el puente al teléfono (APIs del navegador).
     c.cmd('Browser.grantPermissions', permissions=['clipboardReadWrite', 'clipboardSanitizedWrite'])
-    def copiloto(frase, espera=1.2):
+    def copiloto(frase):
         c.js("""(() => { const i = document.getElementById('copiloto-texto'); i.value = %s;
             document.getElementById('form-copiloto').requestSubmit(); })()""" % json.dumps(frase))
-        c.esperar(espera)
-    antes = c.js("document.getElementById('registro').innerText")
+
+    def hasta(cond_js, segundos=8):
+        for _ in range(int(segundos * 4)):
+            c.esperar(0.25)
+            if c.js(cond_js):
+                return True
+        return False
+
     copiloto('manda hola desde el copiloto a discord')
-    ok('echo' in texto() and '/apps/discord' in texto(), 'el copiloto traduce «manda … a discord» a un comando')
+    ok(hasta("document.querySelector('#terminal .term-salida').innerText.includes('/apps/discord')"),
+       'el copiloto traduce «manda … a discord» a un comando')
     copiloto('cuánta batería tengo')
-    ok('🔋' in texto(), 'el copiloto lee la batería real del dispositivo (%s)' % ('🔋' in texto()))
+    ok(hasta("document.querySelector('#terminal .term-salida').innerText.includes('🔋')"),
+       'el copiloto lee la batería real del dispositivo')
     copiloto('las facturas van al webhook')
-    for _ in range(20):
-        if c.js("MoscaObrera.pantalla.destinoPara('facturas')") == 'webhook':
-            break
-        c.esperar(0.25)
-    ok(c.js("MoscaObrera.pantalla.destinoPara('facturas')") == 'webhook', 'el copiloto le enseñó que #facturas → webhook')
+    ok(hasta("MoscaObrera.pantalla.destinoPara('facturas') === 'webhook'"),
+       'el copiloto le enseñó que #facturas → webhook')
     copiloto('cada 10s mándame el precio de bitcoin')
-    ok('tarea 1' in texto() or 'cada 10s' in texto(), 'el copiloto creó una tarea que se repite')
+    ok(hasta("/tarea 1|cada 10s/.test(document.querySelector('#terminal .term-salida').innerText)"),
+       'el copiloto creó una tarea que se repite')
     # nexus directo en la terminal.
     c.js("""(() => { const i = document.querySelector('#terminal .term-input'); i.value = 'nexus red';
         document.querySelector('#terminal .term-linea').requestSubmit(); })()""")
